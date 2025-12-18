@@ -4,54 +4,291 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moodity Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- External Dependencies with Fallback Support -->
+    <script src="https://cdn.tailwindcss.com" onerror="console.error('Tailwind CSS failed to load. Some styles may not work.')"></script>
+    <script src="https://unpkg.com/lucide@latest" onerror="window.lucide = { createIcons: function(){} }; console.error('Lucide icons failed to load.')"></script>
+
     <script>
-        tailwind.config = {
-            darkMode: 'class'
+        // Tailwind configuration
+        if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
+                darkMode: 'class'
+            }
         }
     </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        body { 
-            font-family: 'Inter', sans-serif; 
+
+        /* Fallback font stack if Google Fonts fails */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             transition: background-color 0.5s ease;
             background-attachment: fixed;
         }
-        
-        .custom-range { -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px; background: #334155; outline: none; }
-        .custom-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #6366f1; cursor: pointer; border: 3px solid #0f172a; shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
 
+        /* Custom range slider styling */
+        .custom-range {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #334155;
+            outline: none;
+        }
+        .custom-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            border: 3px solid #0f172a;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+        }
+        .custom-range:focus {
+            outline: 2px solid #6366f1;
+            outline-offset: 2px;
+        }
+
+        /* Glassmorphism card effect */
         .glass-card {
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        
-        /* Prominent divider between side-by-side buttons */
+
+        /* Divider between side-by-side buttons */
         .thick-divider {
             width: 6px;
             background: rgba(51, 65, 85, 0.6);
             border-radius: 3px;
             margin: 1.5rem 0;
         }
+
+        /* Accessibility: Focus indicators */
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid #6366f1;
+            outline-offset: 2px;
+        }
+
+        /* Skip link for keyboard navigation */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #6366f1;
+            color: white;
+            padding: 8px 16px;
+            z-index: 100;
+            border-radius: 0 0 8px 0;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Toast animation */
+        @keyframes toast-in {
+            from { opacity: 0; transform: translate(-50%, 20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes toast-out {
+            from { opacity: 1; transform: translate(-50%, 0); }
+            to { opacity: 0; transform: translate(-50%, -20px); }
+        }
+        .toast-enter { animation: toast-in 0.3s ease-out; }
+        .toast-exit { animation: toast-out 0.3s ease-in forwards; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen">
-    <div id="app" class="container mx-auto max-w-7xl min-h-screen p-6 lg:p-12 pb-24">
+    <!-- Accessibility: Skip to main content link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div id="app" class="container mx-auto max-w-7xl min-h-screen p-6 lg:p-12 pb-24" role="application" aria-label="Moodity Mood Tracker">
         <!-- App content injected here -->
     </div>
 
     <script>
-        // --- STATE MANAGEMENT ---
+        // ===========================================
+        // UTILITY FUNCTIONS
+        // ===========================================
+
+        /**
+         * Escapes HTML special characters to prevent XSS attacks
+         * @param {string} text - The text to escape
+         * @returns {string} - HTML-safe text
+         */
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        /**
+         * Debounces a function to limit execution frequency
+         * @param {Function} func - The function to debounce
+         * @param {number} wait - Milliseconds to wait
+         * @returns {Function} - Debounced function
+         */
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        /**
+         * Validates a date string in YYYY-MM-DD format
+         * @param {string} dateStr - The date string to validate
+         * @returns {boolean} - Whether the date is valid
+         */
+        function isValidDate(dateStr) {
+            if (typeof dateStr !== 'string') return false;
+            const regex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!regex.test(dateStr)) return false;
+            const date = new Date(dateStr);
+            return date instanceof Date && !isNaN(date);
+        }
+
+        /**
+         * Safely parses a date string with fallback
+         * @param {string} dateStr - The date string to parse
+         * @returns {Object} - Object with year, month, day
+         */
+        function parseDateSafe(dateStr) {
+            if (!isValidDate(dateStr)) {
+                const now = new Date();
+                return {
+                    year: now.getFullYear(),
+                    month: now.getMonth() + 1,
+                    day: now.getDate()
+                };
+            }
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return { year: y, month: m, day: d };
+        }
+
+        /**
+         * Formats seconds into MM:SS display
+         * @param {number} seconds - Total seconds
+         * @returns {string} - Formatted time string
+         */
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // ===========================================
+        // DATA VALIDATION SCHEMA
+        // ===========================================
+
+        /**
+         * Validates and sanitizes a history entry
+         * @param {Object} entry - The entry to validate
+         * @returns {Object|null} - Validated entry or null if invalid
+         */
+        function validateEntry(entry) {
+            if (!entry || typeof entry !== 'object') return null;
+
+            const validMoods = ['happy', 'neutral', 'struggling'];
+            const validStatuses = ['pos', 'neg', undefined];
+
+            return {
+                id: typeof entry.id === 'number' ? entry.id : Date.now(),
+                timestamp: typeof entry.timestamp === 'string' ? entry.timestamp : new Date().toISOString(),
+                mood: validMoods.includes(entry.mood) ? entry.mood : 'neutral',
+                arousal: typeof entry.arousal === 'number' && entry.arousal >= 1 && entry.arousal <= 5 ? entry.arousal : 3,
+                social: {
+                    askedFollowUp: Boolean(entry.social?.askedFollowUp),
+                    peerInteraction: Boolean(entry.social?.peerInteraction),
+                    teacherHeavy: Boolean(entry.social?.teacherHeavy)
+                },
+                academic: {
+                    cleanNotes: Boolean(entry.academic?.cleanNotes),
+                    stayedOnTask: Boolean(entry.academic?.stayedOnTask)
+                },
+                regulation: {
+                    negativityLevel: typeof entry.regulation?.negativityLevel === 'number' &&
+                                     entry.regulation.negativityLevel >= 0 &&
+                                     entry.regulation.negativityLevel <= 3
+                                     ? entry.regulation.negativityLevel : 0
+                },
+                notes: typeof entry.notes === 'string' ? entry.notes.substring(0, 1000) : '',
+                quickEntry: Boolean(entry.quickEntry),
+                status: validStatuses.includes(entry.status) ? entry.status : undefined,
+                type: typeof entry.type === 'string' ? entry.type : undefined
+            };
+        }
+
+        /**
+         * Loads and validates history from localStorage
+         * @returns {Array} - Validated history array
+         */
+        function loadHistory() {
+            try {
+                const stored = localStorage.getItem('moodity_history');
+                if (!stored) return [];
+
+                const parsed = JSON.parse(stored);
+                if (!Array.isArray(parsed)) return [];
+
+                // Validate each entry and filter out invalid ones
+                return parsed.map(validateEntry).filter(entry => entry !== null);
+            } catch (error) {
+                console.error('Failed to load history from localStorage:', error);
+                return [];
+            }
+        }
+
+        /**
+         * Safely saves history to localStorage
+         * @param {Array} history - The history array to save
+         */
+        function saveHistory(history) {
+            try {
+                localStorage.setItem('moodity_history', JSON.stringify(history));
+            } catch (error) {
+                console.error('Failed to save history to localStorage:', error);
+                showToast('Failed to save data', 'error');
+            }
+        }
+
+        // ===========================================
+        // TIMER PRESETS CONFIGURATION
+        // ===========================================
+
+        const TIMER_PRESETS = [
+            { label: '1m', seconds: 60 },
+            { label: '3m', seconds: 180 },
+            { label: '5m', seconds: 300 },
+            { label: '10m', seconds: 600 }
+        ];
+        const DEFAULT_TIMER = 300; // 5 minutes default
+
+        // ===========================================
+        // STATE MANAGEMENT
+        // ===========================================
+
         let state = {
             view: 'dashboard',
             step: 0,
-            history: JSON.parse(localStorage.getItem('moodity_history') || '[]'),
+            history: loadHistory(),
             darkMode: true,
             selectedDate: new Date().toISOString().split('T')[0],
             timerActive: false,
-            timeLeft: 300,
+            timeLeft: DEFAULT_TIMER,
+            timerDuration: DEFAULT_TIMER,
             currentSession: {
                 mood: 'neutral',
                 arousal: 3,
@@ -62,166 +299,615 @@
             }
         };
 
+        // Timer interval reference for cleanup
+        let timerInterval = null;
+
+        // Toast management to prevent stacking
+        let activeToast = null;
+
+        /**
+         * Updates state and triggers re-render
+         * @param {Object} updates - Partial state updates
+         */
         function setState(updates) {
             state = { ...state, ...updates };
-            if (updates.history) localStorage.setItem('moodity_history', JSON.stringify(state.history));
+            if (updates.history) {
+                saveHistory(state.history);
+            }
             render();
         }
 
+        /**
+         * Updates current session state properly through setState
+         * @param {Object} updates - Partial session updates
+         */
+        function updateSession(updates) {
+            // Deep merge for nested objects
+            const newSession = { ...state.currentSession };
+
+            for (const key in updates) {
+                if (typeof updates[key] === 'object' && updates[key] !== null && !Array.isArray(updates[key])) {
+                    newSession[key] = { ...newSession[key], ...updates[key] };
+                } else {
+                    newSession[key] = updates[key];
+                }
+            }
+
+            setState({ currentSession: newSession });
+        }
+
+        /**
+         * Removes the most recent history entry
+         */
         function undoLastAction() {
             if (state.history.length > 0) {
                 const updatedHistory = [...state.history];
                 updatedHistory.shift();
                 setState({ history: updatedHistory });
+                showToast('Last entry removed', 'info');
             }
         }
 
+        /**
+         * Shows a toast notification (prevents stacking)
+         * @param {string} message - The message to display
+         * @param {string} type - Toast type: 'success', 'error', 'info'
+         */
+        function showToast(message, type = 'success') {
+            // Remove existing toast if present
+            if (activeToast) {
+                activeToast.remove();
+                activeToast = null;
+            }
+
+            const bgColor = type === 'error' ? 'bg-rose-600' :
+                           type === 'info' ? 'bg-slate-600' : 'bg-indigo-600';
+
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-10 left-1/2 -translate-x-1/2 ${bgColor} text-white px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl z-50 pointer-events-none toast-enter`;
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+            toast.innerText = escapeHtml(message);
+            document.body.appendChild(toast);
+            activeToast = toast;
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.remove();
+                    }
+                    if (activeToast === toast) {
+                        activeToast = null;
+                    }
+                }, 300);
+            }, 2000);
+        }
+
+        /**
+         * Creates a quick log entry for wins/struggles
+         * @param {string} type - Category type (Social, Org, etc.)
+         * @param {string} status - 'pos' for win, 'neg' for struggle
+         */
         function quickLog(type, status) {
             const label = status === 'pos' ? `WIN: ${type}` : `STRUGGLE: ${type}`;
-            const entry = { 
-                ...state.currentSession, 
-                notes: label, 
-                id: Date.now(), 
+            const entry = {
+                ...state.currentSession,
+                notes: label,
+                id: Date.now(),
                 timestamp: new Date().toISOString(),
                 quickEntry: true,
                 status: status,
                 type: type
             };
             setState({ history: [entry, ...state.history] });
-            
-            const toast = document.createElement('div');
-            toast.className = `fixed bottom-10 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl z-50 pointer-events-none animate-bounce`;
-            toast.innerText = label;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2000);
+            showToast(label);
         }
 
-        function updateSession(updates) {
-            state.currentSession = { ...state.currentSession, ...updates };
-            render();
-        }
-
+        /**
+         * Saves the current structured session entry
+         */
         function saveEntry() {
             const now = new Date();
-            const [y, m, d] = state.selectedDate.split('-');
-            const timestamp = new Date(y, m - 1, d, now.getHours(), now.getMinutes()).toISOString();
+            const { year, month, day } = parseDateSafe(state.selectedDate);
+            const timestamp = new Date(year, month - 1, day, now.getHours(), now.getMinutes()).toISOString();
             const newEntry = { ...state.currentSession, id: Date.now(), timestamp: timestamp };
-            setState({ 
-                history: [newEntry, ...state.history], 
-                view: 'dashboard', 
+
+            setState({
+                history: [newEntry, ...state.history],
+                view: 'dashboard',
                 step: 0,
-                currentSession: { mood: 'neutral', arousal: 3, social: { askedFollowUp: false, peerInteraction: false, teacherHeavy: false }, academic: { cleanNotes: false, stayedOnTask: false }, regulation: { negativityLevel: 0 }, notes: "" }
+                currentSession: {
+                    mood: 'neutral',
+                    arousal: 3,
+                    social: { askedFollowUp: false, peerInteraction: false, teacherHeavy: false },
+                    academic: { cleanNotes: false, stayedOnTask: false },
+                    regulation: { negativityLevel: 0 },
+                    notes: ""
+                }
             });
+            showToast('Session saved');
         }
 
-        setInterval(() => {
-            if (state.timerActive && state.timeLeft > 0) {
-                state.timeLeft -= 1;
-                render();
-            }
-        }, 1000);
+        // ===========================================
+        // TIMER MANAGEMENT
+        // ===========================================
 
+        /**
+         * Starts the session timer
+         */
+        function startTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            setState({ timerActive: true });
+
+            timerInterval = setInterval(() => {
+                if (state.timerActive && state.timeLeft > 0) {
+                    state.timeLeft -= 1;
+                    // Only update timer display, not full re-render
+                    updateTimerDisplay();
+
+                    if (state.timeLeft === 0) {
+                        stopTimer();
+                        showToast('Timer complete!', 'info');
+                    }
+                }
+            }, 1000);
+        }
+
+        /**
+         * Stops the session timer
+         */
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            setState({ timerActive: false });
+        }
+
+        /**
+         * Toggles timer on/off
+         */
+        function toggleTimer() {
+            if (state.timerActive) {
+                stopTimer();
+            } else {
+                startTimer();
+            }
+        }
+
+        /**
+         * Resets timer to selected duration
+         * @param {number} seconds - Duration in seconds
+         */
+        function resetTimer(seconds) {
+            stopTimer();
+            setState({ timeLeft: seconds, timerDuration: seconds });
+        }
+
+        /**
+         * Updates only the timer display without full re-render
+         */
+        function updateTimerDisplay() {
+            const timerEl = document.getElementById('timer-display');
+            if (timerEl) {
+                timerEl.textContent = formatTime(state.timeLeft);
+            }
+        }
+
+        // ===========================================
+        // DATA EXPORT FUNCTIONS
+        // ===========================================
+
+        /**
+         * Downloads history as JSON file
+         */
+        function downloadJSON() {
+            try {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.history, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `moodity_archive_${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                showToast('JSON exported');
+            } catch (error) {
+                console.error('Failed to export JSON:', error);
+                showToast('Export failed', 'error');
+            }
+        }
+
+        /**
+         * Downloads history as CSV file
+         */
+        function downloadCSV() {
+            try {
+                const headers = ['Date', 'Time', 'Mood', 'Arousal', 'Type', 'Status', 'Notes',
+                               'Reciprocal Conversation', 'Peer Interaction', 'Teacher Dependency',
+                               'Organizational Quality', 'Task Persistence', 'Regulation Level'];
+
+                const rows = state.history.map(h => {
+                    const date = new Date(h.timestamp);
+                    return [
+                        date.toLocaleDateString(),
+                        date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+                        h.mood || '',
+                        h.arousal || '',
+                        h.type || '',
+                        h.status === 'pos' ? 'Win' : h.status === 'neg' ? 'Struggle' : '',
+                        `"${(h.notes || '').replace(/"/g, '""')}"`,
+                        h.social?.askedFollowUp ? 'Yes' : 'No',
+                        h.social?.peerInteraction ? 'Yes' : 'No',
+                        h.social?.teacherHeavy ? 'Yes' : 'No',
+                        h.academic?.cleanNotes ? 'Yes' : 'No',
+                        h.academic?.stayedOnTask ? 'Yes' : 'No',
+                        h.regulation?.negativityLevel ?? ''
+                    ].join(',');
+                });
+
+                const csv = [headers.join(','), ...rows].join('\n');
+                const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `moodity_archive_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                showToast('CSV exported');
+            } catch (error) {
+                console.error('Failed to export CSV:', error);
+                showToast('Export failed', 'error');
+            }
+        }
+
+        /**
+         * Clears all history data
+         */
+        function clearAllData() {
+            if (confirm('Are you sure you want to wipe the local archive? This cannot be undone.')) {
+                setState({ history: [] });
+                showToast('Archive cleared', 'info');
+            }
+        }
+
+        // ===========================================
+        // RENDER FUNCTIONS
+        // ===========================================
+
+        /**
+         * Main render function - builds entire UI
+         */
         function render() {
             const root = document.getElementById('app');
+
             root.innerHTML = `
                 <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
                     <div>
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20" aria-hidden="true">
                                 <i data-lucide="activity" class="text-white w-6 h-6"></i>
                             </div>
                             <h1 class="text-4xl font-black tracking-tighter uppercase italic text-white">MOODITY</h1>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-slate-800">
+                    <nav class="flex items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-slate-800" aria-label="Main controls">
                         ${state.history.length > 0 ? `
-                        <button onclick="undoLastAction()" class="p-3 text-slate-400 hover:text-indigo-400 transition-colors" title="Undo Last Action">
-                            <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                        <button id="undo-btn" class="p-3 text-slate-400 hover:text-indigo-400 transition-colors"
+                                aria-label="Undo last action" title="Undo Last Action">
+                            <i data-lucide="rotate-ccw" class="w-5 h-5" aria-hidden="true"></i>
                         </button>
-                        <div class="w-px h-6 bg-slate-800"></div>
+                        <div class="w-px h-6 bg-slate-800" aria-hidden="true"></div>
                         ` : ''}
-                        
-                        <button onclick="setState({ timerActive: !state.timerActive })" 
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${state.timerActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400'}">
-                            <i data-lucide="timer" class="w-4 h-4"></i>
-                            <span class="font-mono text-sm font-bold">${Math.floor(state.timeLeft / 60)}:${(state.timeLeft % 60).toString().padStart(2, '0')}</span>
-                        </button>
 
-                        <button onclick="setState({ view: state.view === 'history' ? 'dashboard' : 'history' })" class="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">
-                            <i data-lucide="archive" class="w-4 h-4"></i>
+                        <!-- Timer Controls -->
+                        <div class="flex items-center gap-2">
+                            <button id="timer-toggle-btn"
+                                class="flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${state.timerActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-white'}"
+                                aria-label="${state.timerActive ? 'Stop timer' : 'Start timer'}"
+                                aria-pressed="${state.timerActive}">
+                                <i data-lucide="timer" class="w-4 h-4" aria-hidden="true"></i>
+                                <span id="timer-display" class="font-mono text-sm font-bold">${formatTime(state.timeLeft)}</span>
+                            </button>
+
+                            <!-- Timer Preset Dropdown -->
+                            <div class="relative">
+                                <button id="timer-preset-btn" class="p-2 text-slate-500 hover:text-slate-300 transition-colors"
+                                        aria-label="Timer presets" aria-haspopup="true">
+                                    <i data-lucide="settings" class="w-4 h-4" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button id="archive-btn"
+                            class="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all"
+                            aria-label="View archive with ${state.history.length} logs">
+                            <i data-lucide="archive" class="w-4 h-4" aria-hidden="true"></i>
                             <span class="text-[10px] font-black uppercase tracking-widest">${state.history.length} Logs</span>
                         </button>
-                    </div>
+                    </nav>
                 </header>
 
-                <main>
+                <main id="main-content" tabindex="-1">
                     ${state.view === 'dashboard' ? renderDashboard() : ''}
                     ${state.view === 'entry' ? renderEntry() : ''}
                     ${state.view === 'history' ? renderHistory() : ''}
                 </main>
             `;
-            lucide.createIcons();
+
+            // Initialize Lucide icons
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+
+            // Attach event listeners
+            attachEventListeners();
         }
 
+        /**
+         * Attaches all event listeners after render
+         */
+        function attachEventListeners() {
+            // Header controls
+            const undoBtn = document.getElementById('undo-btn');
+            if (undoBtn) {
+                undoBtn.addEventListener('click', undoLastAction);
+            }
+
+            const timerToggleBtn = document.getElementById('timer-toggle-btn');
+            if (timerToggleBtn) {
+                timerToggleBtn.addEventListener('click', toggleTimer);
+            }
+
+            const timerPresetBtn = document.getElementById('timer-preset-btn');
+            if (timerPresetBtn) {
+                timerPresetBtn.addEventListener('click', showTimerPresets);
+            }
+
+            const archiveBtn = document.getElementById('archive-btn');
+            if (archiveBtn) {
+                archiveBtn.addEventListener('click', () => {
+                    setState({ view: state.view === 'history' ? 'dashboard' : 'history' });
+                });
+            }
+
+            // Dashboard controls
+            const dateInput = document.getElementById('session-date');
+            if (dateInput) {
+                dateInput.addEventListener('change', (e) => {
+                    if (isValidDate(e.target.value)) {
+                        setState({ selectedDate: e.target.value });
+                    }
+                });
+            }
+
+            const newSessionBtn = document.getElementById('new-session-btn');
+            if (newSessionBtn) {
+                newSessionBtn.addEventListener('click', () => {
+                    setState({ view: 'entry', step: 0 });
+                });
+            }
+
+            // Quick log cards
+            document.querySelectorAll('[data-quicklog]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const type = btn.dataset.type;
+                    const status = btn.dataset.status;
+                    quickLog(type, status);
+                });
+            });
+
+            // Entry form controls
+            const closeEntryBtn = document.getElementById('close-entry-btn');
+            if (closeEntryBtn) {
+                closeEntryBtn.addEventListener('click', () => {
+                    setState({ view: 'dashboard' });
+                });
+            }
+
+            const backBtn = document.getElementById('back-btn');
+            if (backBtn) {
+                backBtn.addEventListener('click', () => {
+                    setState({ step: state.step - 1 });
+                });
+            }
+
+            const nextBtn = document.getElementById('next-btn');
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    if (state.step === 3) {
+                        saveEntry();
+                    } else {
+                        setState({ step: state.step + 1 });
+                    }
+                });
+            }
+
+            // Mood selection
+            document.querySelectorAll('[data-mood]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    updateSession({ mood: btn.dataset.mood });
+                });
+            });
+
+            // Arousal slider
+            const arousalSlider = document.getElementById('arousal-slider');
+            if (arousalSlider) {
+                arousalSlider.addEventListener('input', (e) => {
+                    updateSession({ arousal: parseInt(e.target.value) });
+                });
+            }
+
+            // Toggle buttons for social/academic
+            document.querySelectorAll('[data-toggle]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const [category, field] = btn.dataset.toggle.split('.');
+                    const currentValue = state.currentSession[category][field];
+                    updateSession({ [category]: { ...state.currentSession[category], [field]: !currentValue } });
+                });
+            });
+
+            // Regulation level buttons
+            document.querySelectorAll('[data-regulation]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    updateSession({ regulation: { negativityLevel: parseInt(btn.dataset.regulation) } });
+                });
+            });
+
+            // Notes textarea
+            const notesTextarea = document.getElementById('notes-textarea');
+            if (notesTextarea) {
+                notesTextarea.addEventListener('input', (e) => {
+                    updateSession({ notes: e.target.value });
+                });
+            }
+
+            // History controls
+            const exportJsonBtn = document.getElementById('export-json-btn');
+            if (exportJsonBtn) {
+                exportJsonBtn.addEventListener('click', downloadJSON);
+            }
+
+            const exportCsvBtn = document.getElementById('export-csv-btn');
+            if (exportCsvBtn) {
+                exportCsvBtn.addEventListener('click', downloadCSV);
+            }
+
+            const closeHistoryBtn = document.getElementById('close-history-btn');
+            if (closeHistoryBtn) {
+                closeHistoryBtn.addEventListener('click', () => {
+                    setState({ view: 'dashboard' });
+                });
+            }
+
+            const clearDataBtn = document.getElementById('clear-data-btn');
+            if (clearDataBtn) {
+                clearDataBtn.addEventListener('click', clearAllData);
+            }
+        }
+
+        /**
+         * Shows timer preset options
+         */
+        function showTimerPresets() {
+            // Remove existing preset menu if present
+            const existing = document.getElementById('timer-presets-menu');
+            if (existing) {
+                existing.remove();
+                return;
+            }
+
+            const menu = document.createElement('div');
+            menu.id = 'timer-presets-menu';
+            menu.className = 'absolute top-full right-0 mt-2 bg-slate-800 border border-slate-700 rounded-xl p-2 shadow-xl z-50';
+            menu.setAttribute('role', 'menu');
+            menu.innerHTML = TIMER_PRESETS.map(preset => `
+                <button class="block w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"
+                        role="menuitem" data-timer-preset="${preset.seconds}">
+                    ${preset.label}
+                </button>
+            `).join('');
+
+            const presetBtn = document.getElementById('timer-preset-btn');
+            if (presetBtn) {
+                presetBtn.parentElement.appendChild(menu);
+
+                menu.querySelectorAll('[data-timer-preset]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        resetTimer(parseInt(btn.dataset.timerPreset));
+                        menu.remove();
+                    });
+                });
+
+                // Close menu on outside click
+                setTimeout(() => {
+                    document.addEventListener('click', function closeMenu(e) {
+                        if (!menu.contains(e.target) && e.target !== presetBtn) {
+                            menu.remove();
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    });
+                }, 0);
+            }
+        }
+
+        /**
+         * Renders the dashboard view
+         */
         function renderDashboard() {
             return `
                 <div class="animate-in fade-in duration-700 space-y-12">
-                    <!-- Date & New Session Side-by-Side -->
+                    <!-- Date & New Session Controls -->
                     <div class="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
                         <div class="flex flex-col items-center gap-2">
-                            <label class="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em]">Session Date</label>
-                            <input type="date" value="${state.selectedDate}" onchange="setState({selectedDate: this.value})" 
-                                class="bg-slate-900 border-2 border-slate-800 rounded-2xl px-6 py-4 text-white font-black uppercase tracking-widest focus:border-indigo-500 outline-none transition-all shadow-xl text-sm">
+                            <label for="session-date" class="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em]">Session Date</label>
+                            <input type="date" id="session-date" value="${escapeHtml(state.selectedDate)}"
+                                class="bg-slate-900 border-2 border-slate-800 rounded-2xl px-6 py-4 text-white font-black uppercase tracking-widest focus:border-indigo-500 outline-none transition-all shadow-xl text-sm"
+                                aria-describedby="date-help">
+                            <span id="date-help" class="sr-only">Select the date for your mood entry</span>
                         </div>
-                        <div class="h-12 w-px bg-slate-800 hidden sm:block mt-4"></div>
+                        <div class="h-12 w-px bg-slate-800 hidden sm:block mt-4" aria-hidden="true"></div>
                         <div class="flex flex-col items-center gap-2">
                              <label class="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em]">Action</label>
-                             <button onclick="setState({ view: 'entry', step: 0 })" 
+                             <button id="new-session-btn"
                                 class="group relative flex items-center gap-4 bg-white text-slate-950 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-500/10">
-                                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                <i data-lucide="plus-circle" class="w-4 h-4" aria-hidden="true"></i>
                                 Structured Session
                              </button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 justify-items-center">
+                    <!-- Quick Log Cards Grid -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 justify-items-center" role="group" aria-label="Quick log buttons">
                         ${renderSplitCard('Social', 'users')}
                         ${renderSplitCard('Org', 'layout')}
                         ${renderSplitCard('Indy', 'home')}
                         ${renderSplitCard('Task', 'check-square')}
                         ${renderSplitCard('Motor', 'mouse-pointer-2')}
                     </div>
-                    
+
                     <div class="flex flex-col items-center gap-8 py-4">
-                        <div class="w-full max-w-md h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+                        <div class="w-full max-w-md h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent" aria-hidden="true"></div>
                     </div>
                 </div>
             `;
         }
 
+        /**
+         * Renders a split card for quick logging
+         * @param {string} label - Card label
+         * @param {string} icon - Lucide icon name
+         */
         function renderSplitCard(label, icon) {
+            const safeLabel = escapeHtml(label);
             return `
                 <div class="flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500 w-full max-w-[240px]">
                     <div class="flex items-center justify-between px-4">
-                         <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">${label}</span>
-                         <i data-lucide="${icon}" class="w-4 h-4 text-slate-600"></i>
+                         <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">${safeLabel}</span>
+                         <i data-lucide="${escapeHtml(icon)}" class="w-4 h-4 text-slate-600" aria-hidden="true"></i>
                     </div>
-                    <div class="aspect-square glass-card rounded-[2.5rem] flex flex-row overflow-hidden border-2 border-slate-800/50 shadow-2xl">
+                    <div class="aspect-square glass-card rounded-[2.5rem] flex flex-row overflow-hidden border-2 border-slate-800/50 shadow-2xl" role="group" aria-label="${safeLabel} quick log">
                         <!-- STRUGGLE (-) ON LEFT -->
-                        <button onclick="quickLog('${label}', 'neg')" 
-                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all">
-                            <i data-lucide="minus" class="w-10 h-10 text-slate-500 group-hover:text-white group-hover:scale-125 transition-all"></i>
+                        <button data-quicklog data-type="${safeLabel}" data-status="neg"
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all"
+                            aria-label="Log struggle for ${safeLabel}">
+                            <i data-lucide="minus" class="w-10 h-10 text-slate-500 group-hover:text-white group-hover:scale-125 transition-all" aria-hidden="true"></i>
                             <span class="text-[8px] font-black uppercase tracking-widest mt-2 opacity-0 group-hover:opacity-100 text-slate-500">Struggle</span>
                         </button>
-                        
-                        <!-- THICK DIVIDER -->
-                        <div class="thick-divider h-auto"></div>
-                        
+
+                        <!-- DIVIDER -->
+                        <div class="thick-divider h-auto" aria-hidden="true"></div>
+
                         <!-- WIN (+) ON RIGHT -->
-                        <button onclick="quickLog('${label}', 'pos')" 
-                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all">
-                            <i data-lucide="plus" class="w-10 h-10 text-indigo-500 group-hover:scale-125 transition-all"></i>
+                        <button data-quicklog data-type="${safeLabel}" data-status="pos"
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all"
+                            aria-label="Log win for ${safeLabel}">
+                            <i data-lucide="plus" class="w-10 h-10 text-indigo-500 group-hover:scale-125 transition-all" aria-hidden="true"></i>
                             <span class="text-[8px] font-black uppercase tracking-widest mt-2 opacity-0 group-hover:opacity-100 text-indigo-400">Win</span>
                         </button>
                     </div>
@@ -229,17 +915,22 @@
             `;
         }
 
+        /**
+         * Renders the structured entry form
+         */
         function renderEntry() {
             const steps = ["Emotional Baseline", "Social Interaction", "Executive Function", "Session Notes"];
             return `
-                <div class="max-w-4xl mx-auto glass-card rounded-[3rem] p-8 lg:p-16 border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-500">
+                <div class="max-w-4xl mx-auto glass-card rounded-[3rem] p-8 lg:p-16 border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-500"
+                     role="form" aria-label="Structured session entry">
                     <div class="flex justify-between items-start mb-12">
                         <div>
-                            <p class="text-[10px] font-black text-indigo-500 uppercase tracking-[0.5em] mb-2">PHASE 0${state.step + 1}</p>
-                            <h2 class="text-4xl font-black italic uppercase text-white tracking-tighter leading-none">${steps[state.step]}</h2>
+                            <p class="text-[10px] font-black text-indigo-500 uppercase tracking-[0.5em] mb-2" aria-hidden="true">PHASE 0${state.step + 1}</p>
+                            <h2 class="text-4xl font-black italic uppercase text-white tracking-tighter leading-none">${escapeHtml(steps[state.step])}</h2>
+                            <p class="sr-only">Step ${state.step + 1} of 4: ${steps[state.step]}</p>
                         </div>
-                        <button onclick="setState({ view: 'dashboard' })" class="p-4 hover:bg-slate-800 rounded-full text-slate-500 transition-colors">
-                            <i data-lucide="x" class="w-6 h-6"></i>
+                        <button id="close-entry-btn" class="p-4 hover:bg-slate-800 rounded-full text-slate-500 transition-colors" aria-label="Close entry form">
+                            <i data-lucide="x" class="w-6 h-6" aria-hidden="true"></i>
                         </button>
                     </div>
 
@@ -251,142 +942,217 @@
                     </div>
 
                     <div class="mt-16 flex gap-4">
-                        ${state.step > 0 ? `<button onclick="setState({ step: state.step - 1 })" class="flex-1 py-5 bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:text-white transition-all">Back</button>` : ''}
-                        <button onclick="${state.step === 3 ? 'saveEntry()' : 'setState({ step: state.step + 1 })'}" 
+                        ${state.step > 0 ? `
+                        <button id="back-btn" class="flex-1 py-5 bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:text-white transition-all">
+                            Back
+                        </button>` : ''}
+                        <button id="next-btn"
                             class="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all">
                             ${state.step === 3 ? 'Commit to Archive' : 'Next Phase'}
                         </button>
                     </div>
+
+                    <!-- Progress indicator -->
+                    <div class="flex justify-center gap-2 mt-8" role="progressbar" aria-valuenow="${state.step + 1}" aria-valuemin="1" aria-valuemax="4">
+                        ${[0, 1, 2, 3].map(i => `
+                            <div class="w-2 h-2 rounded-full ${i <= state.step ? 'bg-indigo-500' : 'bg-slate-700'}"
+                                 aria-hidden="true"></div>
+                        `).join('')}
+                    </div>
                 </div>
             `;
         }
 
+        /**
+         * Renders Step 0: Emotional Baseline
+         */
         function renderStep0() {
             return `
                 <div class="space-y-12">
-                    <div class="grid grid-cols-3 gap-6">
-                        ${['happy', 'neutral', 'struggling'].map(m => `
-                            <button onclick="updateSession({ mood: '${m}' })" 
-                                class="h-32 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center gap-3 ${state.currentSession.mood === m ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' : 'border-slate-800 bg-slate-900/50 opacity-40 hover:opacity-100'}">
-                                <i data-lucide="${m === 'happy' ? 'sun' : (m === 'neutral' ? 'cloud' : 'cloud-lightning')}" class="w-8 h-8 ${state.currentSession.mood === m ? 'text-indigo-400' : 'text-slate-500'}"></i>
-                                <span class="text-[10px] font-black uppercase tracking-widest">${m}</span>
-                            </button>
-                        `).join('')}
-                    </div>
+                    <fieldset>
+                        <legend class="sr-only">Select your current mood</legend>
+                        <div class="grid grid-cols-3 gap-6" role="radiogroup" aria-label="Mood selection">
+                            ${['happy', 'neutral', 'struggling'].map(m => `
+                                <button data-mood="${m}"
+                                    class="h-32 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center gap-3 ${state.currentSession.mood === m ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' : 'border-slate-800 bg-slate-900/50 opacity-40 hover:opacity-100'}"
+                                    role="radio" aria-checked="${state.currentSession.mood === m}" aria-label="${m}">
+                                    <i data-lucide="${m === 'happy' ? 'sun' : (m === 'neutral' ? 'cloud' : 'cloud-lightning')}"
+                                       class="w-8 h-8 ${state.currentSession.mood === m ? 'text-indigo-400' : 'text-slate-500'}" aria-hidden="true"></i>
+                                    <span class="text-[10px] font-black uppercase tracking-widest">${escapeHtml(m)}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </fieldset>
+
                     <div class="p-10 bg-slate-900/50 rounded-[2.5rem] border border-slate-800">
                         <div class="flex justify-between items-center mb-6 px-2">
-                            <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Intensity Arousal</span>
-                            <span class="text-4xl font-black text-indigo-400 font-mono tracking-tighter">${state.currentSession.arousal}</span>
+                            <label for="arousal-slider" class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Intensity Arousal</label>
+                            <span class="text-4xl font-black text-indigo-400 font-mono tracking-tighter" aria-live="polite">${state.currentSession.arousal}</span>
                         </div>
-                        <input type="range" min="1" max="5" value="${state.currentSession.arousal}" oninput="updateSession({ arousal: parseInt(this.value) })" class="custom-range">
+                        <input type="range" id="arousal-slider" min="1" max="5" value="${state.currentSession.arousal}"
+                               class="custom-range" aria-valuemin="1" aria-valuemax="5" aria-valuenow="${state.currentSession.arousal}">
+                        <div class="flex justify-between text-[9px] text-slate-600 mt-2 px-1">
+                            <span>Low</span>
+                            <span>High</span>
+                        </div>
                     </div>
                 </div>
             `;
         }
 
+        /**
+         * Renders Step 1: Social Interaction
+         */
         function renderStep1() {
             return `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    ${renderEntryToggle('Reciprocal Conversation', state.currentSession.social.askedFollowUp, () => updateSession({ social: {...state.currentSession.social, askedFollowUp: !state.currentSession.social.askedFollowUp}}))}
-                    ${renderEntryToggle('Positive Peer Connection', state.currentSession.social.peerInteraction, () => updateSession({ social: {...state.currentSession.social, peerInteraction: !state.currentSession.social.peerInteraction}}))}
-                    ${renderEntryToggle('Teacher/Staff Dependency', state.currentSession.social.teacherHeavy, () => updateSession({ social: {...state.currentSession.social, teacherHeavy: !state.currentSession.social.teacherHeavy}}))}
-                </div>
+                <fieldset>
+                    <legend class="sr-only">Social interaction indicators</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${renderEntryToggle('Reciprocal Conversation', state.currentSession.social.askedFollowUp, 'social.askedFollowUp')}
+                        ${renderEntryToggle('Positive Peer Connection', state.currentSession.social.peerInteraction, 'social.peerInteraction')}
+                        ${renderEntryToggle('Teacher/Staff Dependency', state.currentSession.social.teacherHeavy, 'social.teacherHeavy')}
+                    </div>
+                </fieldset>
             `;
         }
 
+        /**
+         * Renders Step 2: Executive Function
+         */
         function renderStep2() {
             return `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    ${renderEntryToggle('Organizational Quality', state.currentSession.academic.cleanNotes, () => updateSession({ academic: {...state.currentSession.academic, cleanNotes: !state.currentSession.academic.cleanNotes}}))}
-                    ${renderEntryToggle('Task Persistence', state.currentSession.academic.stayedOnTask, () => updateSession({ academic: {...state.currentSession.academic, stayedOnTask: !state.currentSession.academic.stayedOnTask}}))}
-                </div>
+                <fieldset>
+                    <legend class="sr-only">Executive function indicators</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${renderEntryToggle('Organizational Quality', state.currentSession.academic.cleanNotes, 'academic.cleanNotes')}
+                        ${renderEntryToggle('Task Persistence', state.currentSession.academic.stayedOnTask, 'academic.stayedOnTask')}
+                    </div>
+                </fieldset>
             `;
         }
 
+        /**
+         * Renders Step 3: Session Notes
+         */
         function renderStep3() {
             return `
                 <div class="space-y-8">
-                    <div class="flex flex-col gap-4">
-                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Internal Regulation Rating (0-3)</p>
-                        <div class="grid grid-cols-4 gap-4">
+                    <fieldset>
+                        <legend class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2 mb-4">Internal Regulation Rating (0-3)</legend>
+                        <div class="grid grid-cols-4 gap-4" role="radiogroup" aria-label="Regulation level">
                             ${[0, 1, 2, 3].map(v => `
-                                <button onclick="updateSession({ regulation: {...state.currentSession.regulation, negativityLevel: ${v}} })" 
-                                    class="h-16 rounded-2xl font-black text-lg transition-all border-2 ${state.currentSession.regulation.negativityLevel === v ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-600'}">${v}</button>
+                                <button data-regulation="${v}"
+                                    class="h-16 rounded-2xl font-black text-lg transition-all border-2 ${state.currentSession.regulation.negativityLevel === v ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-600'}"
+                                    role="radio" aria-checked="${state.currentSession.regulation.negativityLevel === v}" aria-label="Level ${v}">
+                                    ${v}
+                                </button>
                             `).join('')}
                         </div>
+                    </fieldset>
+
+                    <div>
+                        <label for="notes-textarea" class="sr-only">Session notes</label>
+                        <textarea id="notes-textarea" placeholder="Narrative context..."
+                            class="w-full p-8 bg-slate-900 text-white rounded-[2rem] border border-slate-800 h-48 focus:border-indigo-500/50 outline-none transition-all placeholder:text-slate-700 font-medium text-lg"
+                            aria-label="Session notes">${escapeHtml(state.currentSession.notes)}</textarea>
                     </div>
-                    <textarea oninput="updateSession({ notes: this.value })" placeholder="Narrative context..." 
-                        class="w-full p-8 bg-slate-900 text-white rounded-[2rem] border border-slate-800 h-48 focus:border-indigo-500/50 outline-none transition-all placeholder:text-slate-700 font-medium text-lg"></textarea>
                 </div>
             `;
         }
 
-        function renderEntryToggle(label, active, action) {
+        /**
+         * Renders a toggle button for entry form
+         * @param {string} label - Button label
+         * @param {boolean} active - Current toggle state
+         * @param {string} toggleKey - Data key for toggle (e.g., 'social.askedFollowUp')
+         */
+        function renderEntryToggle(label, active, toggleKey) {
             return `
-                <button onclick="(${action})()" class="flex justify-between items-center p-8 rounded-[2rem] border-2 transition-all ${active ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'}">
-                    <span class="font-black text-xs uppercase tracking-widest text-left">${label}</span>
-                    <div class="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center">
+                <button data-toggle="${escapeHtml(toggleKey)}"
+                    class="flex justify-between items-center p-8 rounded-[2rem] border-2 transition-all ${active ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'}"
+                    role="switch" aria-checked="${active}" aria-label="${escapeHtml(label)}">
+                    <span class="font-black text-xs uppercase tracking-widest text-left">${escapeHtml(label)}</span>
+                    <div class="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center" aria-hidden="true">
                         ${active ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}
                     </div>
                 </button>
             `;
         }
 
+        /**
+         * Renders the history/archive view
+         */
         function renderHistory() {
             return `
                 <div class="animate-in fade-in slide-in-from-right-12 duration-500">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                         <h2 class="text-4xl font-black italic uppercase text-white tracking-tighter underline decoration-indigo-500 decoration-8 underline-offset-8">ARCHIVE</h2>
-                        <div class="flex gap-3">
-                            <button onclick="downloadData()" class="bg-white text-slate-950 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all">
-                                <i data-lucide="download" class="w-4 h-4"></i> Export JSON
+                        <div class="flex gap-3 flex-wrap">
+                            <button id="export-json-btn" class="bg-white text-slate-950 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all">
+                                <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i> Export JSON
                             </button>
-                            <button onclick="setState({ view: 'dashboard' })" class="bg-slate-800 text-slate-400 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:text-white transition-all">Close</button>
+                            <button id="export-csv-btn" class="bg-emerald-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4" aria-hidden="true"></i> Export CSV
+                            </button>
+                            <button id="close-history-btn" class="bg-slate-800 text-slate-400 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:text-white transition-all">
+                                Close
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        ${state.history.length === 0 ? '<div class="col-span-full py-40 text-center text-slate-700 font-black uppercase tracking-[0.5em]">No Logged Data</div>' : state.history.map(h => `
-                            <div class="glass-card p-8 rounded-[2.5rem] border border-slate-800 group hover:border-indigo-500/30 transition-all">
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" role="list" aria-label="Logged entries">
+                        ${state.history.length === 0 ?
+                            '<div class="col-span-full py-40 text-center text-slate-700 font-black uppercase tracking-[0.5em]" role="status">No Logged Data</div>' :
+                            state.history.map(h => `
+                            <article class="glass-card p-8 rounded-[2.5rem] border border-slate-800 group hover:border-indigo-500/30 transition-all" role="listitem">
                                 <div class="flex justify-between items-start mb-6">
                                     <div class="flex flex-col">
-                                        <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">${new Date(h.timestamp).toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'})}</span>
+                                        <time class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1" datetime="${escapeHtml(h.timestamp)}">
+                                            ${new Date(h.timestamp).toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'})}
+                                        </time>
                                         <span class="text-xl font-black text-white">${new Date(h.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                                     </div>
-                                    <div class="w-12 h-12 bg-slate-800/50 rounded-2xl flex items-center justify-center border border-slate-700">
-                                        <i data-lucide="${h.mood === 'happy' ? 'sun' : (h.mood === 'neutral' ? 'cloud' : 'cloud-lightning')}" class="w-6 h-6 text-indigo-400"></i>
+                                    <div class="w-12 h-12 bg-slate-800/50 rounded-2xl flex items-center justify-center border border-slate-700" aria-label="Mood: ${escapeHtml(h.mood)}">
+                                        <i data-lucide="${h.mood === 'happy' ? 'sun' : (h.mood === 'neutral' ? 'cloud' : 'cloud-lightning')}" class="w-6 h-6 text-indigo-400" aria-hidden="true"></i>
                                     </div>
                                 </div>
                                 <div class="space-y-3">
-                                    ${h.notes ? `<p class="text-sm font-medium text-slate-400 leading-relaxed border-l-2 border-indigo-500/30 pl-4 py-2 bg-slate-950/50 rounded-r-xl italic">"${h.notes}"</p>` : ''}
+                                    ${h.notes ? `<p class="text-sm font-medium text-slate-400 leading-relaxed border-l-2 border-indigo-500/30 pl-4 py-2 bg-slate-950/50 rounded-r-xl italic">"${escapeHtml(h.notes)}"</p>` : ''}
                                     <div class="flex flex-wrap gap-2 pt-2">
-                                        ${h.quickEntry ? `<span class="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded-full border border-indigo-500/20">${h.type || 'Log'}</span>` : ''}
+                                        ${h.quickEntry ? `<span class="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded-full border border-indigo-500/20">${escapeHtml(h.type || 'Log')}</span>` : ''}
                                         ${h.status === 'pos' ? '<span class="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20">Positive Win</span>' : h.status === 'neg' ? '<span class="px-3 py-1 bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase tracking-widest rounded-full border border-rose-500/20">Struggle</span>' : ''}
                                     </div>
                                 </div>
-                            </div>
+                            </article>
                         `).join('')}
                     </div>
 
                     <div class="mt-24 pt-12 border-t border-slate-900 flex justify-center">
-                        <button onclick="if(confirm('Wipe local archive?')) setState({history:[]})" class="text-[9px] font-black text-slate-700 hover:text-rose-500 uppercase tracking-[0.4em] transition-colors">Clear Entire Database</button>
+                        <button id="clear-data-btn" class="text-[9px] font-black text-slate-700 hover:text-rose-500 uppercase tracking-[0.4em] transition-colors">
+                            Clear Entire Database
+                        </button>
                     </div>
                 </div>
             `;
         }
 
-        function downloadData() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.history, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", `moodity_archive_${new Date().toISOString().split('T')[0]}.json`);
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-        }
+        // ===========================================
+        // INITIALIZATION
+        // ===========================================
 
+        // Initial render
         render();
-        window.addEventListener('resize', render);
+
+        // Debounced resize handler to prevent excessive re-renders
+        const debouncedRender = debounce(render, 250);
+        window.addEventListener('resize', debouncedRender);
+
+        // Cleanup timer on page unload
+        window.addEventListener('beforeunload', () => {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+        });
     </script>
 </body>
 </html>
