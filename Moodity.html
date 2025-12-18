@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodity Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            transition: background-color 0.5s ease;
+            background-attachment: fixed;
+        }
+        
+        .custom-range { -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px; background: #334155; outline: none; }
+        .custom-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #6366f1; cursor: pointer; border: 3px solid #0f172a; shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Prominent divider between side-by-side buttons */
+        .thick-divider {
+            width: 6px;
+            background: rgba(51, 65, 85, 0.6);
+            border-radius: 3px;
+            margin: 1.5rem 0;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+    <div id="app" class="container mx-auto max-w-7xl min-h-screen p-6 lg:p-12 pb-24">
+        <!-- App content injected here -->
+    </div>
+
+    <script>
+        // --- STATE MANAGEMENT ---
+        let state = {
+            view: 'dashboard',
+            step: 0,
+            history: JSON.parse(localStorage.getItem('moodity_history') || '[]'),
+            darkMode: true,
+            selectedDate: new Date().toISOString().split('T')[0],
+            timerActive: false,
+            timeLeft: 300,
+            currentSession: {
+                mood: 'neutral',
+                arousal: 3,
+                social: { askedFollowUp: false, peerInteraction: false, teacherHeavy: false },
+                academic: { cleanNotes: false, stayedOnTask: false },
+                regulation: { negativityLevel: 0 },
+                notes: ""
+            }
+        };
+
+        function setState(updates) {
+            state = { ...state, ...updates };
+            if (updates.history) localStorage.setItem('moodity_history', JSON.stringify(state.history));
+            render();
+        }
+
+        function undoLastAction() {
+            if (state.history.length > 0) {
+                const updatedHistory = [...state.history];
+                updatedHistory.shift();
+                setState({ history: updatedHistory });
+            }
+        }
+
+        function quickLog(type, status) {
+            const label = status === 'pos' ? `WIN: ${type}` : `STRUGGLE: ${type}`;
+            const entry = { 
+                ...state.currentSession, 
+                notes: label, 
+                id: Date.now(), 
+                timestamp: new Date().toISOString(),
+                quickEntry: true,
+                status: status,
+                type: type
+            };
+            setState({ history: [entry, ...state.history] });
+            
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-10 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl z-50 pointer-events-none animate-bounce`;
+            toast.innerText = label;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
+        function updateSession(updates) {
+            state.currentSession = { ...state.currentSession, ...updates };
+            render();
+        }
+
+        function saveEntry() {
+            const now = new Date();
+            const [y, m, d] = state.selectedDate.split('-');
+            const timestamp = new Date(y, m - 1, d, now.getHours(), now.getMinutes()).toISOString();
+            const newEntry = { ...state.currentSession, id: Date.now(), timestamp: timestamp };
+            setState({ 
+                history: [newEntry, ...state.history], 
+                view: 'dashboard', 
+                step: 0,
+                currentSession: { mood: 'neutral', arousal: 3, social: { askedFollowUp: false, peerInteraction: false, teacherHeavy: false }, academic: { cleanNotes: false, stayedOnTask: false }, regulation: { negativityLevel: 0 }, notes: "" }
+            });
+        }
+
+        setInterval(() => {
+            if (state.timerActive && state.timeLeft > 0) {
+                state.timeLeft -= 1;
+                render();
+            }
+        }, 1000);
+
+        function render() {
+            const root = document.getElementById('app');
+            root.innerHTML = `
+                <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                <i data-lucide="activity" class="text-white w-6 h-6"></i>
+                            </div>
+                            <h1 class="text-4xl font-black tracking-tighter uppercase italic text-white">MOODITY</h1>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-slate-800">
+                        ${state.history.length > 0 ? `
+                        <button onclick="undoLastAction()" class="p-3 text-slate-400 hover:text-indigo-400 transition-colors" title="Undo Last Action">
+                            <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                        </button>
+                        <div class="w-px h-6 bg-slate-800"></div>
+                        ` : ''}
+                        
+                        <button onclick="setState({ timerActive: !state.timerActive })" 
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl transition-all ${state.timerActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400'}">
+                            <i data-lucide="timer" class="w-4 h-4"></i>
+                            <span class="font-mono text-sm font-bold">${Math.floor(state.timeLeft / 60)}:${(state.timeLeft % 60).toString().padStart(2, '0')}</span>
+                        </button>
+
+                        <button onclick="setState({ view: state.view === 'history' ? 'dashboard' : 'history' })" class="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">
+                            <i data-lucide="archive" class="w-4 h-4"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">${state.history.length} Logs</span>
+                        </button>
+                    </div>
+                </header>
+
+                <main>
+                    ${state.view === 'dashboard' ? renderDashboard() : ''}
+                    ${state.view === 'entry' ? renderEntry() : ''}
+                    ${state.view === 'history' ? renderHistory() : ''}
+                </main>
+            `;
+            lucide.createIcons();
+        }
+
+        function renderDashboard() {
+            return `
+                <div class="animate-in fade-in duration-700 space-y-12">
+                    <!-- Date & New Session Side-by-Side -->
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+                        <div class="flex flex-col items-center gap-2">
+                            <label class="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em]">Session Date</label>
+                            <input type="date" value="${state.selectedDate}" onchange="setState({selectedDate: this.value})" 
+                                class="bg-slate-900 border-2 border-slate-800 rounded-2xl px-6 py-4 text-white font-black uppercase tracking-widest focus:border-indigo-500 outline-none transition-all shadow-xl text-sm">
+                        </div>
+                        <div class="h-12 w-px bg-slate-800 hidden sm:block mt-4"></div>
+                        <div class="flex flex-col items-center gap-2">
+                             <label class="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em]">Action</label>
+                             <button onclick="setState({ view: 'entry', step: 0 })" 
+                                class="group relative flex items-center gap-4 bg-white text-slate-950 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-500/10">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                Structured Session
+                             </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 justify-items-center">
+                        ${renderSplitCard('Social', 'users')}
+                        ${renderSplitCard('Org', 'layout')}
+                        ${renderSplitCard('Indy', 'home')}
+                        ${renderSplitCard('Task', 'check-square')}
+                        ${renderSplitCard('Motor', 'mouse-pointer-2')}
+                    </div>
+                    
+                    <div class="flex flex-col items-center gap-8 py-4">
+                        <div class="w-full max-w-md h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSplitCard(label, icon) {
+            return `
+                <div class="flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500 w-full max-w-[240px]">
+                    <div class="flex items-center justify-between px-4">
+                         <span class="text-[11px] font-black uppercase tracking-widest text-slate-400">${label}</span>
+                         <i data-lucide="${icon}" class="w-4 h-4 text-slate-600"></i>
+                    </div>
+                    <div class="aspect-square glass-card rounded-[2.5rem] flex flex-row overflow-hidden border-2 border-slate-800/50 shadow-2xl">
+                        <!-- STRUGGLE (-) ON LEFT -->
+                        <button onclick="quickLog('${label}', 'neg')" 
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all">
+                            <i data-lucide="minus" class="w-10 h-10 text-slate-500 group-hover:text-white group-hover:scale-125 transition-all"></i>
+                            <span class="text-[8px] font-black uppercase tracking-widest mt-2 opacity-0 group-hover:opacity-100 text-slate-500">Struggle</span>
+                        </button>
+                        
+                        <!-- THICK DIVIDER -->
+                        <div class="thick-divider h-auto"></div>
+                        
+                        <!-- WIN (+) ON RIGHT -->
+                        <button onclick="quickLog('${label}', 'pos')" 
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all">
+                            <i data-lucide="plus" class="w-10 h-10 text-indigo-500 group-hover:scale-125 transition-all"></i>
+                            <span class="text-[8px] font-black uppercase tracking-widest mt-2 opacity-0 group-hover:opacity-100 text-indigo-400">Win</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEntry() {
+            const steps = ["Emotional Baseline", "Social Interaction", "Executive Function", "Session Notes"];
+            return `
+                <div class="max-w-4xl mx-auto glass-card rounded-[3rem] p-8 lg:p-16 border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-500">
+                    <div class="flex justify-between items-start mb-12">
+                        <div>
+                            <p class="text-[10px] font-black text-indigo-500 uppercase tracking-[0.5em] mb-2">PHASE 0${state.step + 1}</p>
+                            <h2 class="text-4xl font-black italic uppercase text-white tracking-tighter leading-none">${steps[state.step]}</h2>
+                        </div>
+                        <button onclick="setState({ view: 'dashboard' })" class="p-4 hover:bg-slate-800 rounded-full text-slate-500 transition-colors">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+
+                    <div class="min-h-[300px]">
+                        ${state.step === 0 ? renderStep0() : ''}
+                        ${state.step === 1 ? renderStep1() : ''}
+                        ${state.step === 2 ? renderStep2() : ''}
+                        ${state.step === 3 ? renderStep3() : ''}
+                    </div>
+
+                    <div class="mt-16 flex gap-4">
+                        ${state.step > 0 ? `<button onclick="setState({ step: state.step - 1 })" class="flex-1 py-5 bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:text-white transition-all">Back</button>` : ''}
+                        <button onclick="${state.step === 3 ? 'saveEntry()' : 'setState({ step: state.step + 1 })'}" 
+                            class="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all">
+                            ${state.step === 3 ? 'Commit to Archive' : 'Next Phase'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStep0() {
+            return `
+                <div class="space-y-12">
+                    <div class="grid grid-cols-3 gap-6">
+                        ${['happy', 'neutral', 'struggling'].map(m => `
+                            <button onclick="updateSession({ mood: '${m}' })" 
+                                class="h-32 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center gap-3 ${state.currentSession.mood === m ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' : 'border-slate-800 bg-slate-900/50 opacity-40 hover:opacity-100'}">
+                                <i data-lucide="${m === 'happy' ? 'sun' : (m === 'neutral' ? 'cloud' : 'cloud-lightning')}" class="w-8 h-8 ${state.currentSession.mood === m ? 'text-indigo-400' : 'text-slate-500'}"></i>
+                                <span class="text-[10px] font-black uppercase tracking-widest">${m}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div class="p-10 bg-slate-900/50 rounded-[2.5rem] border border-slate-800">
+                        <div class="flex justify-between items-center mb-6 px-2">
+                            <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Intensity Arousal</span>
+                            <span class="text-4xl font-black text-indigo-400 font-mono tracking-tighter">${state.currentSession.arousal}</span>
+                        </div>
+                        <input type="range" min="1" max="5" value="${state.currentSession.arousal}" oninput="updateSession({ arousal: parseInt(this.value) })" class="custom-range">
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStep1() {
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${renderEntryToggle('Reciprocal Conversation', state.currentSession.social.askedFollowUp, () => updateSession({ social: {...state.currentSession.social, askedFollowUp: !state.currentSession.social.askedFollowUp}}))}
+                    ${renderEntryToggle('Positive Peer Connection', state.currentSession.social.peerInteraction, () => updateSession({ social: {...state.currentSession.social, peerInteraction: !state.currentSession.social.peerInteraction}}))}
+                    ${renderEntryToggle('Teacher/Staff Dependency', state.currentSession.social.teacherHeavy, () => updateSession({ social: {...state.currentSession.social, teacherHeavy: !state.currentSession.social.teacherHeavy}}))}
+                </div>
+            `;
+        }
+
+        function renderStep2() {
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${renderEntryToggle('Organizational Quality', state.currentSession.academic.cleanNotes, () => updateSession({ academic: {...state.currentSession.academic, cleanNotes: !state.currentSession.academic.cleanNotes}}))}
+                    ${renderEntryToggle('Task Persistence', state.currentSession.academic.stayedOnTask, () => updateSession({ academic: {...state.currentSession.academic, stayedOnTask: !state.currentSession.academic.stayedOnTask}}))}
+                </div>
+            `;
+        }
+
+        function renderStep3() {
+            return `
+                <div class="space-y-8">
+                    <div class="flex flex-col gap-4">
+                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Internal Regulation Rating (0-3)</p>
+                        <div class="grid grid-cols-4 gap-4">
+                            ${[0, 1, 2, 3].map(v => `
+                                <button onclick="updateSession({ regulation: {...state.currentSession.regulation, negativityLevel: ${v}} })" 
+                                    class="h-16 rounded-2xl font-black text-lg transition-all border-2 ${state.currentSession.regulation.negativityLevel === v ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-600'}">${v}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <textarea oninput="updateSession({ notes: this.value })" placeholder="Narrative context..." 
+                        class="w-full p-8 bg-slate-900 text-white rounded-[2rem] border border-slate-800 h-48 focus:border-indigo-500/50 outline-none transition-all placeholder:text-slate-700 font-medium text-lg"></textarea>
+                </div>
+            `;
+        }
+
+        function renderEntryToggle(label, active, action) {
+            return `
+                <button onclick="(${action})()" class="flex justify-between items-center p-8 rounded-[2rem] border-2 transition-all ${active ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'}">
+                    <span class="font-black text-xs uppercase tracking-widest text-left">${label}</span>
+                    <div class="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center">
+                        ${active ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}
+                    </div>
+                </button>
+            `;
+        }
+
+        function renderHistory() {
+            return `
+                <div class="animate-in fade-in slide-in-from-right-12 duration-500">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                        <h2 class="text-4xl font-black italic uppercase text-white tracking-tighter underline decoration-indigo-500 decoration-8 underline-offset-8">ARCHIVE</h2>
+                        <div class="flex gap-3">
+                            <button onclick="downloadData()" class="bg-white text-slate-950 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all">
+                                <i data-lucide="download" class="w-4 h-4"></i> Export JSON
+                            </button>
+                            <button onclick="setState({ view: 'dashboard' })" class="bg-slate-800 text-slate-400 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:text-white transition-all">Close</button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${state.history.length === 0 ? '<div class="col-span-full py-40 text-center text-slate-700 font-black uppercase tracking-[0.5em]">No Logged Data</div>' : state.history.map(h => `
+                            <div class="glass-card p-8 rounded-[2.5rem] border border-slate-800 group hover:border-indigo-500/30 transition-all">
+                                <div class="flex justify-between items-start mb-6">
+                                    <div class="flex flex-col">
+                                        <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">${new Date(h.timestamp).toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'})}</span>
+                                        <span class="text-xl font-black text-white">${new Date(h.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                    </div>
+                                    <div class="w-12 h-12 bg-slate-800/50 rounded-2xl flex items-center justify-center border border-slate-700">
+                                        <i data-lucide="${h.mood === 'happy' ? 'sun' : (h.mood === 'neutral' ? 'cloud' : 'cloud-lightning')}" class="w-6 h-6 text-indigo-400"></i>
+                                    </div>
+                                </div>
+                                <div class="space-y-3">
+                                    ${h.notes ? `<p class="text-sm font-medium text-slate-400 leading-relaxed border-l-2 border-indigo-500/30 pl-4 py-2 bg-slate-950/50 rounded-r-xl italic">"${h.notes}"</p>` : ''}
+                                    <div class="flex flex-wrap gap-2 pt-2">
+                                        ${h.quickEntry ? `<span class="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded-full border border-indigo-500/20">${h.type || 'Log'}</span>` : ''}
+                                        ${h.status === 'pos' ? '<span class="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20">Positive Win</span>' : h.status === 'neg' ? '<span class="px-3 py-1 bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase tracking-widest rounded-full border border-rose-500/20">Struggle</span>' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="mt-24 pt-12 border-t border-slate-900 flex justify-center">
+                        <button onclick="if(confirm('Wipe local archive?')) setState({history:[]})" class="text-[9px] font-black text-slate-700 hover:text-rose-500 uppercase tracking-[0.4em] transition-colors">Clear Entire Database</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function downloadData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.history, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `moodity_archive_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        render();
+        window.addEventListener('resize', render);
+    </script>
+</body>
+</html>
