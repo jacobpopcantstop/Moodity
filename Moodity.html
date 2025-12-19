@@ -135,10 +135,10 @@
             from { opacity: 1; }
             to { opacity: 0; transform: translateY(-10px); }
         }
-        @keyframes typewriter-jolt {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-1px); }
-            75% { transform: translateX(1px); }
+        @keyframes subtle-jiggle {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-0.5deg); }
+            75% { transform: rotate(0.5deg); }
         }
         .comment-popup {
             animation: comment-fade-in 0.3s ease-out;
@@ -147,7 +147,25 @@
             animation: comment-fade-out 0.5s ease-in forwards;
         }
         .comment-popup.typing {
-            animation: typewriter-jolt 0.05s ease-in-out;
+            animation: subtle-jiggle 0.1s ease-in-out;
+        }
+
+        /* Key-turn animation for +/- buttons */
+        @keyframes key-turn-clockwise {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(45deg); }
+            100% { transform: rotate(0deg); }
+        }
+        @keyframes key-turn-counter {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-45deg); }
+            100% { transform: rotate(0deg); }
+        }
+        .key-turn-cw {
+            animation: key-turn-clockwise 0.3s ease-in-out;
+        }
+        .key-turn-ccw {
+            animation: key-turn-counter 0.3s ease-in-out;
         }
     </style>
 </head>
@@ -606,7 +624,18 @@
             state.pendingQuickLog = null;
         }
 
-        function quickLog(skillName, status) {
+        function quickLog(skillName, status, buttonElement) {
+            // Animate the icon with key-turn effect
+            if (buttonElement) {
+                const icon = buttonElement.querySelector('i[data-lucide]');
+                if (icon) {
+                    const animClass = status === 'neg' ? 'key-turn-cw' : 'key-turn-ccw';
+                    icon.classList.remove('key-turn-cw', 'key-turn-ccw');
+                    void icon.offsetWidth; // Force reflow
+                    icon.classList.add(animClass);
+                    setTimeout(() => icon.classList.remove(animClass), 300);
+                }
+            }
             showQuickCommentPopup(skillName, status);
         }
 
@@ -959,7 +988,7 @@
             document.getElementById('new-session-btn')?.addEventListener('click', () => setState({ view: 'entry', step: 0 }));
 
             document.querySelectorAll('[data-quicklog]').forEach(btn => {
-                btn.addEventListener('click', () => quickLog(btn.dataset.skill, btn.dataset.status));
+                btn.addEventListener('click', () => quickLog(btn.dataset.skill, btn.dataset.status, btn));
             });
 
             // Entry
@@ -1572,12 +1601,174 @@
         }
 
         // ===========================================
+        // HOTKEY SUPPORT
+        // ===========================================
+
+        function handleHotkeys(e) {
+            // Don't trigger hotkeys when typing in inputs
+            const activeEl = document.activeElement;
+            const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+
+            // Always allow Escape
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                if (document.getElementById('icon-picker-modal')?.classList.contains('flex')) {
+                    closeIconPicker();
+                } else if (document.getElementById('quick-comment-popup')?.classList.contains('flex')) {
+                    skipQuickComment();
+                } else if (state.view !== 'dashboard') {
+                    setState({ view: 'dashboard' });
+                }
+                return;
+            }
+
+            // Skip other hotkeys if typing
+            if (isTyping) return;
+
+            // Global hotkeys (work in all views)
+            if (e.key === 't' || e.key === 'T') {
+                e.preventDefault();
+                toggleTimer();
+                return;
+            }
+
+            if (e.key === 'a' || e.key === 'A') {
+                e.preventDefault();
+                setState({ view: state.view === 'history' ? 'dashboard' : 'history' });
+                return;
+            }
+
+            if (e.key === 's' || e.key === 'S') {
+                e.preventDefault();
+                setState({ view: state.view === 'settings' ? 'dashboard' : 'settings' });
+                return;
+            }
+
+            if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                undoLastAction();
+                return;
+            }
+
+            // Dashboard hotkeys
+            if (state.view === 'dashboard') {
+                // D for Deep Dive
+                if (e.key === 'd' || e.key === 'D') {
+                    e.preventDefault();
+                    setState({ view: 'entry', step: 0 });
+                    return;
+                }
+
+                // Number keys 1-9 for skills (+ for positive, - modifier for negative)
+                const numKey = parseInt(e.key);
+                if (numKey >= 1 && numKey <= 9) {
+                    const skillIndex = numKey - 1;
+                    if (skillIndex < state.settings.skills.length) {
+                        e.preventDefault();
+                        const skill = state.settings.skills[skillIndex];
+                        // Shift = negative/struggle, no shift = positive/win
+                        const status = e.shiftKey ? 'neg' : 'pos';
+                        // Find the button for animation
+                        const buttons = document.querySelectorAll('[data-quicklog]');
+                        const btn = Array.from(buttons).find(b =>
+                            b.dataset.skill === skill.name && b.dataset.status === status
+                        );
+                        quickLog(skill.name, status, btn);
+                    }
+                    return;
+                }
+            }
+
+            // Entry (Deep Dive) hotkeys
+            if (state.view === 'entry') {
+                const phases = state.settings.sessionPhases;
+                const phase = phases[state.step];
+
+                // Arrow keys for navigation
+                if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                    if (e.key === 'Enter' && activeEl?.tagName === 'BUTTON') return; // Let button handle it
+                    e.preventDefault();
+                    if (state.step === phases.length - 1) {
+                        saveEntry();
+                    } else {
+                        setState({ step: state.step + 1 });
+                    }
+                    return;
+                }
+
+                if (e.key === 'ArrowLeft' && state.step > 0) {
+                    e.preventDefault();
+                    setState({ step: state.step - 1 });
+                    return;
+                }
+
+                // Number keys for mood selection and ratings
+                if (phase?.type === 'mood-arousal') {
+                    const moodNum = parseInt(e.key);
+                    if (moodNum >= 1 && moodNum <= state.settings.moods.length) {
+                        e.preventDefault();
+                        const mood = state.settings.moods[moodNum - 1];
+                        updateSession({ mood: mood.name });
+                        return;
+                    }
+                    // Up/Down for arousal
+                    if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const max = phase.arousalMax || 5;
+                        updateSession({ arousal: Math.min(state.currentSession.arousal + 1, max) });
+                        return;
+                    }
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const min = phase.arousalMin || 1;
+                        updateSession({ arousal: Math.max(state.currentSession.arousal - 1, min) });
+                        return;
+                    }
+                }
+
+                if (phase?.type === 'toggles') {
+                    const toggleNum = parseInt(e.key);
+                    if (toggleNum >= 1 && toggleNum <= (phase.toggles?.length || 0)) {
+                        e.preventDefault();
+                        const toggle = phase.toggles[toggleNum - 1];
+                        const newToggles = { ...state.currentSession.toggles, [toggle.key]: !state.currentSession.toggles[toggle.key] };
+                        updateSession({ toggles: newToggles });
+                        return;
+                    }
+                }
+
+                if (phase?.type === 'notes-rating') {
+                    const ratingNum = parseInt(e.key);
+                    const min = phase.ratingMin || 0;
+                    const max = phase.ratingMax || 3;
+                    if (ratingNum >= min && ratingNum <= max) {
+                        e.preventDefault();
+                        updateSession({ rating: ratingNum });
+                        return;
+                    }
+                }
+            }
+
+            // Settings hotkeys
+            if (state.view === 'settings') {
+                const tabs = ['general', 'skills', 'moods', 'phases', 'data'];
+                const numKey = parseInt(e.key);
+                if (numKey >= 1 && numKey <= tabs.length) {
+                    e.preventDefault();
+                    setState({ settingsTab: tabs[numKey - 1] });
+                    return;
+                }
+            }
+        }
+
+        // ===========================================
         // INIT
         // ===========================================
 
         render();
         window.addEventListener('resize', debounce(render, 250));
         window.addEventListener('beforeunload', () => { if (timerInterval) clearInterval(timerInterval); });
+        window.addEventListener('keydown', handleHotkeys);
 
         // Icon picker modal events
         document.getElementById('close-icon-picker')?.addEventListener('click', closeIconPicker);
