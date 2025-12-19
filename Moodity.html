@@ -43,8 +43,42 @@
             cursor: pointer;
             border: 3px solid #0f172a;
             box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .custom-range::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+        }
+        .custom-range::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            border: 3px solid #0f172a;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
         }
         .custom-range:focus { outline: 2px solid #6366f1; outline-offset: 2px; }
+
+        /* Settings tab button active bulge */
+        .settings-tab-active {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Calendar/date input styling */
+        input[type="date"] {
+            color-scheme: dark;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
 
         .glass-card {
             background: rgba(30, 41, 59, 0.7);
@@ -187,13 +221,6 @@
             white-space: nowrap;
         }
 
-        /* Smooth slider transition */
-        .custom-range {
-            transition: none;
-        }
-        .custom-range::-webkit-slider-thumb {
-            transition: transform 0.1s ease;
-        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen">
@@ -276,6 +303,44 @@
             const mins = Math.floor(seconds / 60);
             const secs = seconds % 60;
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // ===========================================
+        // SOUND EFFECTS
+        // ===========================================
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playClick(type = 'soft') {
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                if (type === 'soft') {
+                    oscillator.frequency.value = 600;
+                    gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.08);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.08);
+                } else if (type === 'success') {
+                    oscillator.frequency.value = 800;
+                    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.15);
+                } else if (type === 'toggle') {
+                    oscillator.frequency.value = 500;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.06, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.05);
+                }
+            } catch (e) {
+                // Audio not supported or blocked
+            }
         }
 
         // ===========================================
@@ -707,8 +772,11 @@
             setState({ settings: newSettings });
         }
 
-        function updateSession(updates) {
-            setState({ currentSession: { ...state.currentSession, ...updates } });
+        function updateSession(updates, skipRender = false) {
+            state.currentSession = { ...state.currentSession, ...updates };
+            if (!skipRender) {
+                render();
+            }
         }
 
         // ===========================================
@@ -891,6 +959,7 @@
         }
 
         function quickLog(skillName, status, buttonElement) {
+            playClick('soft');
             // Animate the icon with key-turn effect
             if (buttonElement) {
                 // Lucide replaces <i> with <svg>, so look for SVG first
@@ -920,6 +989,7 @@
         }
 
         function saveEntry() {
+            playClick('success');
             const now = new Date();
             const { year, month, day } = parseDateSafe(state.selectedDate);
             const timestamp = new Date(year, month - 1, day, now.getHours(), now.getMinutes()).toISOString();
@@ -968,6 +1038,7 @@
         }
 
         function toggleTimer() {
+            playClick('toggle');
             state.timerActive ? stopTimer() : startTimer();
         }
 
@@ -1315,7 +1386,10 @@
             });
 
             document.querySelectorAll('[data-mood]').forEach(btn => {
-                btn.addEventListener('click', () => updateSession({ mood: btn.dataset.mood }));
+                btn.addEventListener('click', () => {
+                    playClick('soft');
+                    updateSession({ mood: btn.dataset.mood });
+                });
             });
 
             document.getElementById('arousal-slider')?.addEventListener('input', (e) => {
@@ -1324,6 +1398,7 @@
 
             document.querySelectorAll('[data-toggle-key]').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    playClick('toggle');
                     const key = btn.dataset.toggleKey;
                     const newToggles = { ...state.currentSession.toggles, [key]: !state.currentSession.toggles[key] };
                     updateSession({ toggles: newToggles });
@@ -1331,11 +1406,14 @@
             });
 
             document.querySelectorAll('[data-rating]').forEach(btn => {
-                btn.addEventListener('click', () => updateSession({ rating: parseInt(btn.dataset.rating) }));
+                btn.addEventListener('click', () => {
+                    playClick('soft');
+                    updateSession({ rating: parseInt(btn.dataset.rating) });
+                });
             });
 
             document.getElementById('notes-textarea')?.addEventListener('input', (e) => {
-                updateSession({ notes: e.target.value });
+                updateSession({ notes: e.target.value }, true); // Skip render to keep focus
             });
 
             // History
@@ -1348,7 +1426,10 @@
 
             // Settings tabs
             document.querySelectorAll('[data-settings-tab]').forEach(btn => {
-                btn.addEventListener('click', () => setState({ settingsTab: btn.dataset.settingsTab }));
+                btn.addEventListener('click', () => {
+                    playClick('soft');
+                    setState({ settingsTab: btn.dataset.settingsTab });
+                });
             });
 
             // Settings actions
@@ -1439,6 +1520,7 @@
             // Timer presets (in dropdown and elsewhere)
             document.querySelectorAll('[data-timer-preset]').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    playClick('soft');
                     resetTimer(parseInt(btn.dataset.timerPreset));
                     setState({ timerDropdownOpen: false });
                 });
@@ -1709,7 +1791,7 @@
 
                     <div class="flex gap-2 mb-8 overflow-x-auto pb-2">
                         ${tabs.map(t => `
-                            <button data-settings-tab="${t.id}" class="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition-all ${state.settingsTab === t.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}">
+                            <button data-settings-tab="${t.id}" class="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition-all ${state.settingsTab === t.id ? 'bg-indigo-600 text-white settings-tab-active' : 'bg-slate-800 text-slate-400 hover:text-white hover:scale-[1.02]'}">
                                 <i data-lucide="${t.icon}" class="w-4 h-4"></i>
                                 ${t.label}
                             </button>
