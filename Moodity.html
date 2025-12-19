@@ -126,30 +126,6 @@
             color: white;
         }
 
-        /* Quick comment popup */
-        @keyframes comment-fade-in {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes comment-fade-out {
-            from { opacity: 1; }
-            to { opacity: 0; transform: translateY(-10px); }
-        }
-        @keyframes subtle-jiggle {
-            0%, 100% { transform: rotate(0deg); }
-            25% { transform: rotate(-0.5deg); }
-            75% { transform: rotate(0.5deg); }
-        }
-        .comment-popup {
-            animation: comment-fade-in 0.3s ease-out;
-        }
-        .comment-popup.fading {
-            animation: comment-fade-out 0.5s ease-in forwards;
-        }
-        .comment-popup.typing {
-            animation: subtle-jiggle 0.1s ease-in-out;
-        }
-
         /* Key-turn animation for +/- buttons */
         @keyframes key-turn-clockwise {
             0% { transform: rotate(0deg); }
@@ -166,6 +142,26 @@
         }
         .key-turn-ccw {
             animation: key-turn-counter 0.3s ease-in-out;
+        }
+
+        /* Hotkey hints */
+        .hotkey-hint {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            background: #6366f1;
+            color: white;
+            font-size: 9px;
+            font-weight: 900;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
     </style>
 </head>
@@ -188,27 +184,19 @@
         </div>
     </div>
 
-    <!-- Quick Comment Popup -->
-    <div id="quick-comment-popup" class="fixed inset-0 bg-black/50 z-40 hidden items-center justify-center p-4">
-        <div class="comment-popup bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-slate-700 shadow-2xl">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-sm font-black text-indigo-400 uppercase tracking-widest">Quick Note (Optional)</h3>
-                <button id="close-comment-popup" class="p-2 text-slate-400 hover:text-white">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-            <textarea id="quick-comment-input"
-                placeholder="Add a note..."
-                class="w-full p-4 bg-slate-800 text-white rounded-xl border border-slate-700 h-24 focus:border-indigo-500 outline-none placeholder:text-slate-600 resize-none"
-                maxlength="500"></textarea>
-            <div class="flex justify-end gap-2 mt-4">
-                <button id="skip-comment-btn" class="px-4 py-2 text-slate-400 hover:text-white text-sm font-bold transition-colors">
-                    Skip
-                </button>
-                <button id="save-comment-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-500 transition-colors">
-                    Save
-                </button>
-            </div>
+    <!-- Quick Comment Popup (non-intrusive bottom bar) -->
+    <div id="quick-comment-popup" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 hidden max-w-sm w-full px-4">
+        <div class="bg-slate-900/95 backdrop-blur rounded-xl p-3 border border-slate-700 shadow-xl flex items-center gap-2">
+            <input id="quick-comment-input" type="text"
+                placeholder="Add note (Enter to save, Esc to skip)..."
+                class="flex-1 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg border border-slate-700 focus:border-indigo-500 outline-none placeholder:text-slate-600"
+                maxlength="500">
+            <button id="save-comment-btn" class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors" title="Save">
+                <i data-lucide="check" class="w-4 h-4"></i>
+            </button>
+            <button id="close-comment-popup" class="p-2 text-slate-500 hover:text-white transition-colors" title="Skip">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
         </div>
     </div>
 
@@ -287,6 +275,7 @@
         const DEFAULT_SETTINGS = {
             uiSize: 'medium',
             appTitle: 'MOODITY',
+            showHotkeyHints: false,
             skills: [
                 { id: 'skill-1', name: 'Social', icon: 'users' },
                 { id: 'skill-2', name: 'Org', icon: 'layout' },
@@ -530,50 +519,39 @@
 
             const popup = document.getElementById('quick-comment-popup');
             const input = document.getElementById('quick-comment-input');
-            const container = popup.querySelector('.comment-popup');
 
             input.value = '';
             popup.classList.remove('hidden');
-            popup.classList.add('flex');
-            container.classList.remove('fading');
+            popup.classList.add('block');
 
-            // Start fade timeout (5 seconds)
+            // Start auto-close timeout (5 seconds)
             clearTimeout(commentFadeTimeout);
             commentFadeTimeout = setTimeout(() => {
                 if (!input.value.trim()) {
-                    fadeAndCloseCommentPopup();
+                    closeCommentPopup();
+                    completeQuickLog('');
                 }
             }, 5000);
 
-            // Typewriter jolt effect on input
+            // Handle keydown for Enter and Escape
+            input.addEventListener('keydown', handleCommentKeydown);
             input.addEventListener('input', handleCommentInput);
             input.focus();
         }
 
-        function handleCommentInput(e) {
-            const container = document.querySelector('.comment-popup');
-
-            // Clear the fade timeout since user is typing
-            clearTimeout(commentFadeTimeout);
-
-            // Add jolt animation
-            container.classList.remove('typing');
-            void container.offsetWidth; // Force reflow
-            container.classList.add('typing');
-
-            // Remove jolt class after animation
-            setTimeout(() => container.classList.remove('typing'), 50);
+        function handleCommentKeydown(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveQuickComment();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                skipQuickComment();
+            }
         }
 
-        function fadeAndCloseCommentPopup() {
-            const popup = document.getElementById('quick-comment-popup');
-            const container = popup.querySelector('.comment-popup');
-
-            container.classList.add('fading');
-            setTimeout(() => {
-                closeCommentPopup();
-                completeQuickLog('');
-            }, 500);
+        function handleCommentInput(e) {
+            // Clear the auto-close timeout since user is typing
+            clearTimeout(commentFadeTimeout);
         }
 
         function closeCommentPopup() {
@@ -581,7 +559,8 @@
             const input = document.getElementById('quick-comment-input');
 
             popup.classList.add('hidden');
-            popup.classList.remove('flex');
+            popup.classList.remove('block');
+            input.removeEventListener('keydown', handleCommentKeydown);
             input.removeEventListener('input', handleCommentInput);
             clearTimeout(commentFadeTimeout);
         }
@@ -941,23 +920,27 @@
 
                     <nav class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-slate-800 flex-wrap">
                         ${state.history.length > 0 ? `
-                        <button id="undo-btn" class="p-3 text-slate-400 hover:text-indigo-400 transition-colors" title="Undo">
+                        <button id="undo-btn" class="p-3 text-slate-400 hover:text-indigo-400 transition-colors relative" title="Undo (Ctrl+Z)">
+                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint text-[7px]">⌘Z</span>' : ''}
                             <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
                         </button>
                         <div class="w-px h-6 bg-slate-800"></div>
                         ` : ''}
 
-                        <button id="timer-btn" class="flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${state.timerActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}">
+                        <button id="timer-btn" class="flex items-center gap-2 px-3 py-2 rounded-xl transition-all relative ${state.timerActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}">
+                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">T</span>' : ''}
                             <i data-lucide="timer" class="w-4 h-4"></i>
                             <span id="timer-display" class="font-mono text-sm font-bold">${formatTime(state.timeLeft)}</span>
                         </button>
 
-                        <button id="archive-btn" class="flex items-center gap-2 px-3 py-2 ${state.view === 'history' ? 'bg-indigo-600 text-white' : 'bg-indigo-500/10 text-indigo-400'} rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">
+                        <button id="archive-btn" class="flex items-center gap-2 px-3 py-2 relative ${state.view === 'history' ? 'bg-indigo-600 text-white' : 'bg-indigo-500/10 text-indigo-400'} rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">
+                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">A</span>' : ''}
                             <i data-lucide="archive" class="w-4 h-4"></i>
                             <span class="text-[10px] font-black uppercase">${state.history.length}</span>
                         </button>
 
-                        <button id="settings-btn" class="p-3 ${state.view === 'settings' ? 'text-indigo-400' : 'text-slate-400'} hover:text-indigo-400 transition-colors" title="Settings">
+                        <button id="settings-btn" class="p-3 relative ${state.view === 'settings' ? 'text-indigo-400' : 'text-slate-400'} hover:text-indigo-400 transition-colors" title="Settings">
+                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">S</span>' : ''}
                             <i data-lucide="settings" class="w-5 h-5"></i>
                         </button>
                     </nav>
@@ -1044,6 +1027,9 @@
             document.getElementById('reset-defaults-btn')?.addEventListener('click', resetToDefaults);
             document.getElementById('clear-all-btn')?.addEventListener('click', clearAllData);
             document.getElementById('import-input')?.addEventListener('change', importData);
+            document.getElementById('toggle-hotkey-hints')?.addEventListener('click', () => {
+                updateSettings({ showHotkeyHints: !state.settings.showHotkeyHints });
+            });
 
             document.getElementById('app-title-input')?.addEventListener('input', (e) => {
                 updateSettings({ appTitle: e.target.value });
@@ -1137,7 +1123,8 @@
                         <div class="h-10 w-px bg-slate-800 hidden sm:block"></div>
                         <div class="flex flex-col items-center gap-2">
                             <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Action</label>
-                            <button id="new-session-btn" class="flex items-center gap-3 bg-white text-slate-950 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all shadow-xl">
+                            <button id="new-session-btn" class="flex items-center gap-3 bg-white text-slate-950 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all shadow-xl relative">
+                                ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">D</span>' : ''}
                                 <i data-lucide="plus-circle" class="w-4 h-4"></i>
                                 Deep Dive
                             </button>
@@ -1155,30 +1142,34 @@
 
                     <!-- Skills Grid -->
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${Math.min(state.settings.skills.length, 5)} gap-6 justify-items-center">
-                        ${state.settings.skills.map(skill => renderSkillCard(skill)).join('')}
+                        ${state.settings.skills.map((skill, index) => renderSkillCard(skill, index)).join('')}
                     </div>
                 </div>
             `;
         }
 
-        function renderSkillCard(skill) {
+        function renderSkillCard(skill, index) {
+            const showHints = state.settings.showHotkeyHints;
+            const keyNum = index + 1;
             return `
                 <div class="flex flex-col gap-3 w-full max-w-[200px]">
                     <div class="flex items-center justify-center gap-2 px-3">
                         <i data-lucide="${escapeHtml(skill.icon)}" class="w-4 h-4 text-slate-600"></i>
                         <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">${escapeHtml(skill.name)}</span>
                     </div>
-                    <div class="aspect-square glass-card rounded-3xl flex flex-row overflow-hidden border-2 border-slate-800/50 shadow-xl">
+                    <div class="aspect-square glass-card rounded-3xl flex flex-row overflow-hidden border-2 border-slate-800/50 shadow-xl relative">
                         <button data-quicklog data-skill="${escapeHtml(skill.name)}" data-status="neg"
-                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all"
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all relative"
                             aria-label="Log struggle for ${escapeHtml(skill.name)}">
+                            ${showHints && keyNum <= 9 ? `<span class="hotkey-hint">⇧${keyNum}</span>` : ''}
                             <i data-lucide="minus" class="w-8 h-8 text-slate-500 group-hover:text-rose-400 group-hover:scale-110 transition-all"></i>
                             <span class="text-[8px] font-black uppercase mt-2 opacity-0 group-hover:opacity-100 text-slate-500">Struggle</span>
                         </button>
                         <div class="thick-divider h-auto"></div>
                         <button data-quicklog data-skill="${escapeHtml(skill.name)}" data-status="pos"
-                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all"
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all relative"
                             aria-label="Log win for ${escapeHtml(skill.name)}">
+                            ${showHints && keyNum <= 9 ? `<span class="hotkey-hint">${keyNum}</span>` : ''}
                             <i data-lucide="plus" class="w-8 h-8 text-indigo-500 group-hover:scale-110 transition-all"></i>
                             <span class="text-[8px] font-black uppercase mt-2 opacity-0 group-hover:opacity-100 text-indigo-400">Win</span>
                         </button>
@@ -1353,6 +1344,7 @@
                 { id: 'skills', label: 'Skills', icon: 'grid' },
                 { id: 'moods', label: 'Moods', icon: 'smile' },
                 { id: 'phases', label: 'Deep Dive', icon: 'list' },
+                { id: 'hotkeys', label: 'Hotkeys', icon: 'keyboard' },
                 { id: 'data', label: 'Data', icon: 'database' }
             ];
 
@@ -1378,6 +1370,7 @@
                     ${state.settingsTab === 'skills' ? renderSkillsSettings() : ''}
                     ${state.settingsTab === 'moods' ? renderMoodsSettings() : ''}
                     ${state.settingsTab === 'phases' ? renderPhasesSettings() : ''}
+                    ${state.settingsTab === 'hotkeys' ? renderHotkeysSettings() : ''}
                     ${state.settingsTab === 'data' ? renderDataSettings() : ''}
                 </div>
             `;
@@ -1552,6 +1545,74 @@
                             </div>
                         `).join('')}
                     </div>
+                </div>
+            `;
+        }
+
+        function renderHotkeysSettings() {
+            const globalHotkeys = [
+                { key: 'T', action: 'Toggle timer' },
+                { key: 'A', action: 'Toggle archive view' },
+                { key: 'S', action: 'Toggle settings' },
+                { key: 'Ctrl+Z', action: 'Undo last entry' },
+                { key: 'Esc', action: 'Close/return to dashboard' }
+            ];
+
+            const dashboardHotkeys = [
+                { key: 'D', action: 'Start Deep Dive' },
+                { key: '1-9', action: 'Quick log WIN for skill 1-9' },
+                { key: 'Shift+1-9', action: 'Quick log STRUGGLE for skill 1-9' }
+            ];
+
+            const deepDiveHotkeys = [
+                { key: '←', action: 'Previous step' },
+                { key: '→ / Enter', action: 'Next step / Save' },
+                { key: '1-9', action: 'Select mood/toggle option' },
+                { key: '↑ / ↓', action: 'Adjust arousal slider' }
+            ];
+
+            const settingsHotkeys = [
+                { key: '1-6', action: 'Switch between tabs' }
+            ];
+
+            const renderHotkeyTable = (hotkeys) => hotkeys.map(h => `
+                <div class="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
+                    <span class="text-slate-400 text-sm">${escapeHtml(h.action)}</span>
+                    <kbd class="px-2 py-1 bg-slate-800 text-indigo-400 text-xs font-mono font-bold rounded">${escapeHtml(h.key)}</kbd>
+                </div>
+            `).join('');
+
+            return `
+                <div class="settings-section">
+                    <h3>Show Hotkey Hints</h3>
+                    <p class="text-slate-500 text-sm mb-4">Display keyboard shortcut badges on buttons throughout the app.</p>
+                    <button id="toggle-hotkey-hints" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${state.settings.showHotkeyHints ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}">
+                        <div class="w-10 h-6 rounded-full relative transition-all ${state.settings.showHotkeyHints ? 'bg-indigo-400' : 'bg-slate-700'}">
+                            <div class="absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${state.settings.showHotkeyHints ? 'left-5' : 'left-1'}"></div>
+                        </div>
+                        <span class="font-bold text-sm">${state.settings.showHotkeyHints ? 'Hints Enabled' : 'Hints Disabled'}</span>
+                    </button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Global Hotkeys</h3>
+                    <p class="text-slate-500 text-sm mb-3">Work in all views</p>
+                    ${renderHotkeyTable(globalHotkeys)}
+                </div>
+
+                <div class="settings-section">
+                    <h3>Dashboard Hotkeys</h3>
+                    ${renderHotkeyTable(dashboardHotkeys)}
+                </div>
+
+                <div class="settings-section">
+                    <h3>Deep Dive Hotkeys</h3>
+                    ${renderHotkeyTable(deepDiveHotkeys)}
+                </div>
+
+                <div class="settings-section">
+                    <h3>Settings Hotkeys</h3>
+                    ${renderHotkeyTable(settingsHotkeys)}
                 </div>
             `;
         }
@@ -1778,11 +1839,7 @@
 
         // Quick comment popup events
         document.getElementById('close-comment-popup')?.addEventListener('click', skipQuickComment);
-        document.getElementById('skip-comment-btn')?.addEventListener('click', skipQuickComment);
         document.getElementById('save-comment-btn')?.addEventListener('click', saveQuickComment);
-        document.getElementById('quick-comment-popup')?.addEventListener('click', (e) => {
-            if (e.target.id === 'quick-comment-popup') skipQuickComment();
-        });
     </script>
 </body>
 </html>
