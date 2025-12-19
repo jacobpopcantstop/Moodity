@@ -221,6 +221,79 @@
             white-space: nowrap;
         }
 
+        /* Light Mode - Burnt Orange Theme */
+        body.light-mode {
+            background: #faf6f1;
+            color: #3d3024;
+        }
+
+        .light-mode .bg-slate-950 { background: #faf6f1; }
+        .light-mode .bg-slate-900 { background: #f5ede3; }
+        .light-mode .bg-slate-900\/50 { background: rgba(245, 237, 227, 0.5); }
+        .light-mode .bg-slate-800 { background: #ebe1d4; }
+        .light-mode .bg-slate-800\/50 { background: rgba(235, 225, 212, 0.5); }
+
+        .light-mode .text-slate-200 { color: #3d3024; }
+        .light-mode .text-slate-300 { color: #4a3c2e; }
+        .light-mode .text-slate-400 { color: #6b5a48; }
+        .light-mode .text-slate-500 { color: #8b7a68; }
+        .light-mode .text-slate-600 { color: #a69280; }
+        .light-mode .text-slate-700 { color: #c4b5a5; }
+        .light-mode .text-white { color: #2d2418; }
+
+        .light-mode .border-slate-800 { border-color: #ddd2c4; }
+        .light-mode .border-slate-700 { border-color: #cfc3b3; }
+
+        .light-mode .bg-indigo-600 { background: #c56a35; }
+        .light-mode .bg-indigo-500\/10 { background: rgba(197, 106, 53, 0.1); }
+        .light-mode .bg-indigo-500\/20 { background: rgba(197, 106, 53, 0.2); }
+        .light-mode .text-indigo-400 { color: #c56a35; }
+        .light-mode .text-indigo-500 { color: #b85d2a; }
+        .light-mode .border-indigo-500 { border-color: #c56a35; }
+        .light-mode .border-indigo-500\/20 { border-color: rgba(197, 106, 53, 0.2); }
+        .light-mode .border-indigo-500\/30 { border-color: rgba(197, 106, 53, 0.3); }
+
+        .light-mode .hover\:text-indigo-400:hover { color: #c56a35; }
+        .light-mode .hover\:bg-indigo-500\/20:hover { background: rgba(197, 106, 53, 0.2); }
+
+        .light-mode .shadow-indigo-500\/20 { --tw-shadow-color: rgba(197, 106, 53, 0.2); }
+
+        .light-mode .glass-card {
+            background: rgba(250, 246, 241, 0.9);
+            border-color: rgba(197, 106, 53, 0.1);
+        }
+
+        .light-mode .settings-section {
+            background: rgba(245, 237, 227, 0.7);
+            border-color: rgba(197, 106, 53, 0.1);
+        }
+        .light-mode .settings-section h3 { color: #c56a35; }
+
+        .light-mode .custom-range { background: #ddd2c4; }
+        .light-mode .custom-range::-webkit-slider-thumb {
+            background: #c56a35;
+            border-color: #faf6f1;
+            box-shadow: 0 0 15px rgba(197, 106, 53, 0.4);
+        }
+        .light-mode .custom-range::-moz-range-thumb {
+            background: #c56a35;
+            border-color: #faf6f1;
+            box-shadow: 0 0 15px rgba(197, 106, 53, 0.4);
+        }
+
+        .light-mode input[type="date"] { color-scheme: light; }
+        .light-mode input[type="date"]::-webkit-calendar-picker-indicator { filter: none; }
+
+        .light-mode .hotkey-hint,
+        .light-mode .toolbar-hint {
+            background: rgba(139, 122, 104, 0.2);
+            color: #6b5a48;
+        }
+
+        .light-mode .settings-tab-active {
+            box-shadow: 0 4px 15px rgba(197, 106, 53, 0.3);
+        }
+
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen">
@@ -371,6 +444,7 @@
         const DEFAULT_SETTINGS = {
             uiSize: 'medium',
             appTitle: 'MOODITY',
+            lightMode: false,
             showHotkeyHints: false,
             hotkeysEnabled: true,
             skills: [
@@ -767,9 +841,13 @@
             render();
         }
 
-        function updateSettings(updates) {
+        function updateSettings(updates, skipRender = false) {
             const newSettings = { ...state.settings, ...updates };
-            setState({ settings: newSettings });
+            state.settings = newSettings;
+            saveSettings(newSettings);
+            if (!skipRender) {
+                render();
+            }
         }
 
         function updateSession(updates, skipRender = false) {
@@ -1056,9 +1134,9 @@
             updateSettings({ timerPresets: presets });
         }
 
-        function updateTimerPreset(id, updates) {
+        function updateTimerPreset(id, updates, skipRender = false) {
             const presets = state.settings.timerPresets.map(p => p.id === id ? { ...p, ...updates } : p);
-            updateSettings({ timerPresets: presets });
+            updateSettings({ timerPresets: presets }, skipRender);
         }
 
         function deleteTimerPreset(id) {
@@ -1147,9 +1225,9 @@
             updateSettings({ skills });
         }
 
-        function updateSkill(id, updates) {
+        function updateSkill(id, updates, skipRender = false) {
             const skills = state.settings.skills.map(s => s.id === id ? { ...s, ...updates } : s);
-            updateSettings({ skills });
+            updateSettings({ skills }, skipRender);
             trackAchievementStat('skillCustomized', id);
         }
 
@@ -1167,9 +1245,9 @@
             updateSettings({ moods });
         }
 
-        function updateMood(id, updates) {
+        function updateMood(id, updates, skipRender = false) {
             const moods = state.settings.moods.map(m => m.id === id ? { ...m, ...updates } : m);
-            updateSettings({ moods });
+            updateSettings({ moods }, skipRender);
         }
 
         function deleteMood(id) {
@@ -1191,9 +1269,9 @@
             updateSettings({ sessionPhases: phases });
         }
 
-        function updatePhase(id, updates) {
+        function updatePhase(id, updates, skipRender = false) {
             const phases = state.settings.sessionPhases.map(p => p.id === id ? { ...p, ...updates } : p);
-            updateSettings({ sessionPhases: phases });
+            updateSettings({ sessionPhases: phases }, skipRender);
         }
 
         function deletePhase(id) {
@@ -1223,14 +1301,14 @@
             updateSettings({ sessionPhases: phases });
         }
 
-        function updateToggleInPhase(phaseId, toggleId, updates) {
+        function updateToggleInPhase(phaseId, toggleId, updates, skipRender = false) {
             const phases = state.settings.sessionPhases.map(p => {
                 if (p.id === phaseId && p.toggles) {
                     return { ...p, toggles: p.toggles.map(t => t.id === toggleId ? { ...t, ...updates } : t) };
                 }
                 return p;
             });
-            updateSettings({ sessionPhases: phases });
+            updateSettings({ sessionPhases: phases }, skipRender);
         }
 
         function deleteToggleFromPhase(phaseId, toggleId) {
@@ -1270,7 +1348,8 @@
         function render() {
             const root = document.getElementById('app');
             const sizeClass = `size-${state.settings.uiSize || 'medium'}`;
-            document.body.className = `bg-slate-950 text-slate-200 min-h-screen ${sizeClass}`;
+            const lightModeClass = state.settings.lightMode ? 'light-mode' : '';
+            document.body.className = `bg-slate-950 text-slate-200 min-h-screen ${sizeClass} ${lightModeClass}`;
 
             root.innerHTML = `
                 <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -1444,15 +1523,28 @@
                 updateSettings({ showHotkeyHints: !state.settings.showHotkeyHints });
             });
             document.getElementById('toggle-hotkeys-enabled')?.addEventListener('click', () => {
-                updateSettings({ hotkeysEnabled: state.settings.hotkeysEnabled === false ? true : false });
+                const newEnabled = state.settings.hotkeysEnabled === false ? true : false;
+                // Auto-disable hints when hotkeys are disabled
+                const updates = { hotkeysEnabled: newEnabled };
+                if (!newEnabled) {
+                    updates.showHotkeyHints = false;
+                }
+                updateSettings(updates);
             });
 
             document.getElementById('app-title-input')?.addEventListener('input', (e) => {
-                updateSettings({ appTitle: e.target.value });
+                updateSettings({ appTitle: e.target.value }, true);
             });
 
             document.querySelectorAll('[data-size]').forEach(btn => {
-                btn.addEventListener('click', () => updateSettings({ uiSize: btn.dataset.size }));
+                btn.addEventListener('click', () => {
+                    playClick('soft');
+                    updateSettings({ uiSize: btn.dataset.size });
+                });
+            });
+            document.getElementById('toggle-light-mode')?.addEventListener('click', () => {
+                playClick('toggle');
+                updateSettings({ lightMode: !state.settings.lightMode });
             });
 
             // Icon picker buttons
@@ -1465,7 +1557,7 @@
                 btn.addEventListener('click', () => deleteSkill(btn.dataset.deleteSkill));
             });
             document.querySelectorAll('[data-skill-name]').forEach(input => {
-                input.addEventListener('input', (e) => updateSkill(input.dataset.skillId, { name: e.target.value }));
+                input.addEventListener('input', (e) => updateSkill(input.dataset.skillId, { name: e.target.value }, true));
             });
 
             // Mood editing
@@ -1473,7 +1565,7 @@
                 btn.addEventListener('click', () => deleteMood(btn.dataset.deleteMood));
             });
             document.querySelectorAll('[data-mood-label]').forEach(input => {
-                input.addEventListener('input', (e) => updateMood(input.dataset.moodId, { label: e.target.value, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }));
+                input.addEventListener('input', (e) => updateMood(input.dataset.moodId, { label: e.target.value, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }, true));
             });
 
             // Timer preset editing
@@ -1481,12 +1573,12 @@
                 btn.addEventListener('click', () => deleteTimerPreset(btn.dataset.deleteTimerPreset));
             });
             document.querySelectorAll('[data-timer-label]').forEach(input => {
-                input.addEventListener('input', (e) => updateTimerPreset(input.dataset.timerId, { label: e.target.value }));
+                input.addEventListener('input', (e) => updateTimerPreset(input.dataset.timerId, { label: e.target.value }, true));
             });
             document.querySelectorAll('[data-timer-seconds]').forEach(input => {
                 input.addEventListener('input', (e) => {
                     const seconds = parseInt(e.target.value) || 60;
-                    updateTimerPreset(input.dataset.timerId, { seconds: Math.max(10, Math.min(3600, seconds)) });
+                    updateTimerPreset(input.dataset.timerId, { seconds: Math.max(10, Math.min(3600, seconds)) }, true);
                 });
             });
 
@@ -1501,7 +1593,7 @@
                 btn.addEventListener('click', () => movePhase(btn.dataset.movePhaseDown, 1));
             });
             document.querySelectorAll('[data-phase-title]').forEach(input => {
-                input.addEventListener('input', (e) => updatePhase(input.dataset.phaseId, { title: e.target.value }));
+                input.addEventListener('input', (e) => updatePhase(input.dataset.phaseId, { title: e.target.value }, true));
             });
             document.querySelectorAll('[data-add-toggle]').forEach(btn => {
                 btn.addEventListener('click', () => addToggleToPhase(btn.dataset.addToggle));
@@ -1510,7 +1602,7 @@
             // Toggle editing
             document.querySelectorAll('[data-toggle-label]').forEach(input => {
                 input.addEventListener('input', (e) => {
-                    updateToggleInPhase(input.dataset.phaseId, input.dataset.toggleId, { label: e.target.value });
+                    updateToggleInPhase(input.dataset.phaseId, input.dataset.toggleId, { label: e.target.value }, true);
                 });
             });
             document.querySelectorAll('[data-delete-toggle]').forEach(btn => {
@@ -1826,6 +1918,15 @@
                             </button>
                         `).join('')}
                     </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Theme</h3>
+                    <p class="text-slate-500 text-sm mb-4">Switch between dark mode and a warm, easy-on-the-eyes light mode.</p>
+                    <button id="toggle-light-mode" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${state.settings.lightMode ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}">
+                        <i data-lucide="${state.settings.lightMode ? 'sun' : 'moon'}" class="w-5 h-5"></i>
+                        <span class="font-bold text-sm">${state.settings.lightMode ? 'Light Mode' : 'Dark Mode'}</span>
+                    </button>
                 </div>
 
                 <div class="settings-section">
