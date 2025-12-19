@@ -1520,6 +1520,7 @@
             // Timer presets (in dropdown and elsewhere)
             document.querySelectorAll('[data-timer-preset]').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    playClick('soft');
                     resetTimer(parseInt(btn.dataset.timerPreset));
                     setState({ timerDropdownOpen: false });
                 });
