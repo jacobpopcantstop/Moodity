@@ -147,21 +147,21 @@
         /* Hotkey hints */
         .hotkey-hint {
             position: absolute;
-            top: -6px;
-            right: -6px;
-            min-width: 18px;
-            height: 18px;
-            padding: 0 4px;
-            background: #6366f1;
-            color: white;
-            font-size: 9px;
-            font-weight: 900;
-            border-radius: 4px;
+            top: 4px;
+            right: 4px;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 3px;
+            background: rgba(148, 163, 184, 0.3);
+            color: #94a3b8;
+            font-size: 8px;
+            font-weight: 700;
+            border-radius: 3px;
             display: flex;
             align-items: center;
             justify-content: center;
             text-transform: uppercase;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            pointer-events: none;
         }
     </style>
 </head>
@@ -334,6 +334,239 @@
             ],
             defaultTimer: 300
         };
+
+        // ===========================================
+        // ACHIEVEMENTS SYSTEM
+        // ===========================================
+
+        const ACHIEVEMENTS = [
+            // Getting Started
+            { id: 'first_entry', name: 'First Steps', description: 'Log your first entry', icon: 'footprints', category: 'getting-started' },
+            { id: 'first_win', name: 'Winner', description: 'Log your first win', icon: 'trophy', category: 'getting-started' },
+            { id: 'first_struggle', name: 'Honest', description: 'Log your first struggle', icon: 'heart', category: 'getting-started' },
+            { id: 'first_deep_dive', name: 'Deep Thinker', description: 'Complete your first deep dive', icon: 'brain', category: 'getting-started' },
+            { id: 'use_timer', name: 'Time Keeper', description: 'Use the timer feature', icon: 'timer', category: 'getting-started' },
+            { id: 'customize_skill', name: 'Personal Touch', description: 'Customize a skill', icon: 'edit', category: 'getting-started' },
+
+            // Consistency
+            { id: 'entries_10', name: 'Getting Started', description: 'Log 10 entries', icon: 'star', category: 'consistency', threshold: 10 },
+            { id: 'entries_50', name: 'Building Habits', description: 'Log 50 entries', icon: 'flame', category: 'consistency', threshold: 50 },
+            { id: 'entries_100', name: 'Century', description: 'Log 100 entries', icon: 'award', category: 'consistency', threshold: 100 },
+            { id: 'entries_500', name: 'Dedicated', description: 'Log 500 entries', icon: 'gem', category: 'consistency', threshold: 500 },
+            { id: 'entries_1000', name: 'Legendary', description: 'Log 1000 entries', icon: 'crown', category: 'consistency', threshold: 1000 },
+
+            // Wins
+            { id: 'wins_10', name: 'On a Roll', description: 'Log 10 wins', icon: 'trending-up', category: 'wins', threshold: 10 },
+            { id: 'wins_50', name: 'Champion', description: 'Log 50 wins', icon: 'medal', category: 'wins', threshold: 50 },
+            { id: 'wins_100', name: 'Unstoppable', description: 'Log 100 wins', icon: 'zap', category: 'wins', threshold: 100 },
+
+            // Reflection
+            { id: 'deep_dives_5', name: 'Reflective', description: 'Complete 5 deep dives', icon: 'compass', category: 'reflection', threshold: 5 },
+            { id: 'deep_dives_25', name: 'Introspective', description: 'Complete 25 deep dives', icon: 'eye', category: 'reflection', threshold: 25 },
+            { id: 'deep_dives_100', name: 'Self-Aware', description: 'Complete 100 deep dives', icon: 'sun', category: 'reflection', threshold: 100 },
+            { id: 'add_notes_10', name: 'Note Taker', description: 'Add notes to 10 entries', icon: 'file-text', category: 'reflection', threshold: 10 },
+
+            // Explorer
+            { id: 'try_all_moods', name: 'Full Spectrum', description: 'Use all mood options', icon: 'palette', category: 'explorer' },
+            { id: 'try_all_skills', name: 'Well-Rounded', description: 'Log entries for all skills', icon: 'target', category: 'explorer' },
+            { id: 'export_data', name: 'Backup Pro', description: 'Export your data', icon: 'download', category: 'explorer' },
+            { id: 'use_hotkeys', name: 'Keyboard Ninja', description: 'Use keyboard shortcuts', icon: 'keyboard', category: 'explorer' },
+
+            // Special
+            { id: 'all_skills_one_day', name: 'Productive Day', description: 'Log all skills in one day', icon: 'calendar-check', category: 'special' },
+            { id: 'streak_3', name: 'Three-peat', description: '3 day logging streak', icon: 'flame', category: 'special', threshold: 3 },
+            { id: 'streak_7', name: 'Week Warrior', description: '7 day logging streak', icon: 'shield', category: 'special', threshold: 7 },
+            { id: 'streak_30', name: 'Monthly Master', description: '30 day logging streak', icon: 'rocket', category: 'special', threshold: 30 },
+        ];
+
+        function loadAchievements() {
+            try {
+                const stored = localStorage.getItem('moodity_achievements');
+                if (!stored) return { unlocked: [], stats: { hotkeyUsed: false, exportUsed: false, skillsCustomized: [] } };
+                return JSON.parse(stored);
+            } catch (e) {
+                return { unlocked: [], stats: { hotkeyUsed: false, exportUsed: false, skillsCustomized: [] } };
+            }
+        }
+
+        function saveAchievements(achievements) {
+            try {
+                localStorage.setItem('moodity_achievements', JSON.stringify(achievements));
+            } catch (e) {
+                console.error('Failed to save achievements:', e);
+            }
+        }
+
+        function unlockAchievement(id) {
+            const achievements = loadAchievements();
+            if (achievements.unlocked.includes(id)) return false;
+
+            const achievement = ACHIEVEMENTS.find(a => a.id === id);
+            if (!achievement) return false;
+
+            achievements.unlocked.push(id);
+            achievements[id + '_date'] = new Date().toISOString();
+            saveAchievements(achievements);
+
+            // Show special toast
+            showAchievementToast(achievement);
+            return true;
+        }
+
+        function showAchievementToast(achievement) {
+            if (activeToast) {
+                activeToast.remove();
+                activeToast = null;
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-10 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 toast-enter flex items-center gap-3';
+            toast.setAttribute('role', 'status');
+            toast.innerHTML = `
+                <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <i data-lucide="${achievement.icon}" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <div class="text-[9px] font-bold uppercase tracking-widest opacity-80">Achievement Unlocked!</div>
+                    <div class="font-black text-sm">${escapeHtml(achievement.name)}</div>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            activeToast = toast;
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => { toast.remove(); activeToast = null; }, 300);
+            }, 3500);
+        }
+
+        function checkAchievements() {
+            const achievements = loadAchievements();
+            const history = state.history;
+
+            // Count stats
+            const totalEntries = history.length;
+            const wins = history.filter(h => h.status === 'pos').length;
+            const struggles = history.filter(h => h.status === 'neg').length;
+            const deepDives = history.filter(h => !h.quickEntry).length;
+            const notedEntries = history.filter(h => h.notes && h.notes.length > 20).length;
+
+            // Getting Started
+            if (totalEntries >= 1) unlockAchievement('first_entry');
+            if (wins >= 1) unlockAchievement('first_win');
+            if (struggles >= 1) unlockAchievement('first_struggle');
+            if (deepDives >= 1) unlockAchievement('first_deep_dive');
+
+            // Consistency milestones
+            if (totalEntries >= 10) unlockAchievement('entries_10');
+            if (totalEntries >= 50) unlockAchievement('entries_50');
+            if (totalEntries >= 100) unlockAchievement('entries_100');
+            if (totalEntries >= 500) unlockAchievement('entries_500');
+            if (totalEntries >= 1000) unlockAchievement('entries_1000');
+
+            // Wins milestones
+            if (wins >= 10) unlockAchievement('wins_10');
+            if (wins >= 50) unlockAchievement('wins_50');
+            if (wins >= 100) unlockAchievement('wins_100');
+
+            // Reflection milestones
+            if (deepDives >= 5) unlockAchievement('deep_dives_5');
+            if (deepDives >= 25) unlockAchievement('deep_dives_25');
+            if (deepDives >= 100) unlockAchievement('deep_dives_100');
+            if (notedEntries >= 10) unlockAchievement('add_notes_10');
+
+            // Explorer - mood variety
+            const usedMoods = new Set(history.filter(h => h.mood).map(h => h.mood));
+            if (usedMoods.size >= state.settings.moods.length && state.settings.moods.length >= 3) {
+                unlockAchievement('try_all_moods');
+            }
+
+            // Explorer - skill variety
+            const usedSkills = new Set(history.filter(h => h.type).map(h => h.type));
+            if (usedSkills.size >= state.settings.skills.length && state.settings.skills.length >= 3) {
+                unlockAchievement('try_all_skills');
+            }
+
+            // Special - all skills in one day
+            const today = new Date().toISOString().split('T')[0];
+            const todaySkills = new Set(
+                history
+                    .filter(h => h.timestamp.startsWith(today) && h.type)
+                    .map(h => h.type)
+            );
+            if (todaySkills.size >= state.settings.skills.length && state.settings.skills.length >= 3) {
+                unlockAchievement('all_skills_one_day');
+            }
+
+            // Calculate streak
+            const streak = calculateStreak();
+            if (streak >= 3) unlockAchievement('streak_3');
+            if (streak >= 7) unlockAchievement('streak_7');
+            if (streak >= 30) unlockAchievement('streak_30');
+
+            // Stats-based achievements
+            if (achievements.stats.hotkeyUsed) unlockAchievement('use_hotkeys');
+            if (achievements.stats.exportUsed) unlockAchievement('export_data');
+            if (achievements.stats.skillsCustomized && achievements.stats.skillsCustomized.length > 0) {
+                unlockAchievement('customize_skill');
+            }
+        }
+
+        function calculateStreak() {
+            if (state.history.length === 0) return 0;
+
+            const dates = [...new Set(state.history.map(h =>
+                new Date(h.timestamp).toISOString().split('T')[0]
+            ))].sort().reverse();
+
+            if (dates.length === 0) return 0;
+
+            const today = new Date().toISOString().split('T')[0];
+            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+            // Must have logged today or yesterday to have active streak
+            if (dates[0] !== today && dates[0] !== yesterday) return 0;
+
+            let streak = 1;
+            let currentDate = new Date(dates[0]);
+
+            for (let i = 1; i < dates.length; i++) {
+                const prevDate = new Date(currentDate);
+                prevDate.setDate(prevDate.getDate() - 1);
+                const prevDateStr = prevDate.toISOString().split('T')[0];
+
+                if (dates[i] === prevDateStr) {
+                    streak++;
+                    currentDate = prevDate;
+                } else {
+                    break;
+                }
+            }
+
+            return streak;
+        }
+
+        function trackAchievementStat(stat, value) {
+            const achievements = loadAchievements();
+            if (stat === 'hotkeyUsed') {
+                achievements.stats.hotkeyUsed = true;
+            } else if (stat === 'exportUsed') {
+                achievements.stats.exportUsed = true;
+            } else if (stat === 'timerUsed') {
+                achievements.stats.timerUsed = true;
+                unlockAchievement('use_timer');
+            } else if (stat === 'skillCustomized') {
+                if (!achievements.stats.skillsCustomized) achievements.stats.skillsCustomized = [];
+                if (!achievements.stats.skillsCustomized.includes(value)) {
+                    achievements.stats.skillsCustomized.push(value);
+                }
+            }
+            saveAchievements(achievements);
+            checkAchievements();
+        }
 
         // ===========================================
         // SETTINGS PERSISTENCE
@@ -601,12 +834,14 @@
             setState({ history: [entry, ...state.history] });
             showToast(label);
             state.pendingQuickLog = null;
+            checkAchievements();
         }
 
         function quickLog(skillName, status, buttonElement) {
             // Animate the icon with key-turn effect
             if (buttonElement) {
-                const icon = buttonElement.querySelector('i[data-lucide]');
+                // Lucide replaces <i> with <svg>, so look for SVG first
+                const icon = buttonElement.querySelector('svg') || buttonElement.querySelector('i[data-lucide]');
                 if (icon) {
                     const animClass = status === 'neg' ? 'key-turn-cw' : 'key-turn-ccw';
                     icon.classList.remove('key-turn-cw', 'key-turn-ccw');
@@ -650,6 +885,7 @@
                 currentSession: { mood: 'neutral', arousal: 3, toggles: {}, rating: 0, notes: '' }
             });
             showToast('Session saved');
+            checkAchievements();
         }
 
         // ===========================================
@@ -659,6 +895,7 @@
         function startTimer() {
             if (timerInterval) clearInterval(timerInterval);
             setState({ timerActive: true });
+            trackAchievementStat('timerUsed');
             timerInterval = setInterval(() => {
                 if (state.timerActive && state.timeLeft > 0) {
                     state.timeLeft -= 1;
@@ -722,6 +959,7 @@
                 a.download = `moodity_backup_${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
                 showToast('Backup exported');
+                trackAchievementStat('exportUsed');
             } catch (e) {
                 showToast('Export failed', 'error');
             }
@@ -788,6 +1026,7 @@
         function updateSkill(id, updates) {
             const skills = state.settings.skills.map(s => s.id === id ? { ...s, ...updates } : s);
             updateSettings({ skills });
+            trackAchievementStat('skillCustomized', id);
         }
 
         function deleteSkill(id) {
@@ -1131,15 +1370,6 @@
                         </div>
                     </div>
 
-                    <!-- Timer Presets -->
-                    <div class="flex justify-center gap-2 flex-wrap">
-                        ${state.settings.timerPresets.map(p => `
-                            <button data-timer-preset="${p.seconds}" class="px-3 py-1 text-xs font-bold rounded-lg ${state.timeLeft === p.seconds ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'} transition-all">
-                                ${escapeHtml(p.label)}
-                            </button>
-                        `).join('')}
-                    </div>
-
                     <!-- Skills Grid -->
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${Math.min(state.settings.skills.length, 5)} gap-6 justify-items-center">
                         ${state.settings.skills.map((skill, index) => renderSkillCard(skill, index)).join('')}
@@ -1157,19 +1387,19 @@
                         <i data-lucide="${escapeHtml(skill.icon)}" class="w-4 h-4 text-slate-600"></i>
                         <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">${escapeHtml(skill.name)}</span>
                     </div>
-                    <div class="aspect-square glass-card rounded-3xl flex flex-row overflow-hidden border-2 border-slate-800/50 shadow-xl relative">
+                    <div class="aspect-square glass-card rounded-3xl flex flex-row border-2 border-slate-800/50 shadow-xl relative overflow-visible">
                         <button data-quicklog data-skill="${escapeHtml(skill.name)}" data-status="neg"
-                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all relative"
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-slate-800/50 transition-all relative overflow-visible rounded-l-3xl"
                             aria-label="Log struggle for ${escapeHtml(skill.name)}">
-                            ${showHints && keyNum <= 9 ? `<span class="hotkey-hint">⇧${keyNum}</span>` : ''}
+                            ${showHints && keyNum <= 9 ? `<span class="hotkey-hint" style="top: 8px; left: 8px; right: auto;">⇧${keyNum}</span>` : ''}
                             <i data-lucide="minus" class="w-8 h-8 text-slate-500 group-hover:text-rose-400 group-hover:scale-110 transition-all"></i>
                             <span class="text-[8px] font-black uppercase mt-2 opacity-0 group-hover:opacity-100 text-slate-500">Struggle</span>
                         </button>
                         <div class="thick-divider h-auto"></div>
                         <button data-quicklog data-skill="${escapeHtml(skill.name)}" data-status="pos"
-                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all relative"
+                            class="flex-1 flex flex-col items-center justify-center group hover:bg-indigo-500/10 transition-all relative overflow-visible rounded-r-3xl"
                             aria-label="Log win for ${escapeHtml(skill.name)}">
-                            ${showHints && keyNum <= 9 ? `<span class="hotkey-hint">${keyNum}</span>` : ''}
+                            ${showHints && keyNum <= 9 ? `<span class="hotkey-hint" style="top: 8px; right: 8px;">${keyNum}</span>` : ''}
                             <i data-lucide="plus" class="w-8 h-8 text-indigo-500 group-hover:scale-110 transition-all"></i>
                             <span class="text-[8px] font-black uppercase mt-2 opacity-0 group-hover:opacity-100 text-indigo-400">Win</span>
                         </button>
@@ -1214,13 +1444,15 @@
         }
 
         function renderPhaseContent(phase) {
+            const showHints = state.settings.showHotkeyHints;
             if (phase.type === 'mood-arousal') {
                 return `
                     <div class="space-y-8">
                         <div class="grid grid-cols-${state.settings.moods.length} gap-4">
-                            ${state.settings.moods.map(m => `
+                            ${state.settings.moods.map((m, idx) => `
                                 <button data-mood="${escapeHtml(m.name)}"
-                                    class="h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 ${state.currentSession.mood === m.name ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900/50 opacity-50 hover:opacity-100'}">
+                                    class="h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 relative ${state.currentSession.mood === m.name ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900/50 opacity-50 hover:opacity-100'}">
+                                    ${showHints ? `<span class="hotkey-hint">${idx + 1}</span>` : ''}
                                     <i data-lucide="${escapeHtml(m.icon)}" class="w-6 h-6 ${state.currentSession.mood === m.name ? 'text-indigo-400' : 'text-slate-500'}"></i>
                                     <span class="text-[9px] font-black uppercase">${escapeHtml(m.label)}</span>
                                 </button>
@@ -1243,11 +1475,12 @@
             if (phase.type === 'toggles') {
                 return `
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        ${(phase.toggles || []).map(t => {
+                        ${(phase.toggles || []).map((t, idx) => {
                             const active = state.currentSession.toggles[t.key];
                             return `
                                 <button data-toggle-key="${escapeHtml(t.key)}"
-                                    class="flex justify-between items-center p-6 rounded-2xl border-2 transition-all ${active ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'}">
+                                    class="flex justify-between items-center p-6 rounded-2xl border-2 transition-all relative ${active ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-500'}">
+                                    ${showHints ? `<span class="hotkey-hint">${idx + 1}</span>` : ''}
                                     <span class="font-bold text-xs uppercase tracking-wide text-left">${escapeHtml(t.label)}</span>
                                     <div class="w-6 h-6 rounded-full border-2 border-current flex items-center justify-center">
                                         ${active ? '<i data-lucide="check" class="w-3 h-3"></i>' : ''}
@@ -1267,7 +1500,8 @@
                             <div class="grid grid-cols-${(phase.ratingMax || 3) - (phase.ratingMin || 0) + 1} gap-3">
                                 ${Array.from({ length: (phase.ratingMax || 3) - (phase.ratingMin || 0) + 1 }, (_, i) => i + (phase.ratingMin || 0)).map(v => `
                                     <button data-rating="${v}"
-                                        class="h-14 rounded-xl font-black text-lg border-2 transition-all ${state.currentSession.rating === v ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-600'}">
+                                        class="h-14 rounded-xl font-black text-lg border-2 transition-all relative ${state.currentSession.rating === v ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-600'}">
+                                        ${showHints ? `<span class="hotkey-hint">${v}</span>` : ''}
                                         ${v}
                                     </button>
                                 `).join('')}
@@ -1345,6 +1579,7 @@
                 { id: 'moods', label: 'Moods', icon: 'smile' },
                 { id: 'phases', label: 'Deep Dive', icon: 'list' },
                 { id: 'hotkeys', label: 'Hotkeys', icon: 'keyboard' },
+                { id: 'achievements', label: 'Achievements', icon: 'trophy' },
                 { id: 'data', label: 'Data', icon: 'database' }
             ];
 
@@ -1371,6 +1606,7 @@
                     ${state.settingsTab === 'moods' ? renderMoodsSettings() : ''}
                     ${state.settingsTab === 'phases' ? renderPhasesSettings() : ''}
                     ${state.settingsTab === 'hotkeys' ? renderHotkeysSettings() : ''}
+                    ${state.settingsTab === 'achievements' ? renderAchievementsSettings() : ''}
                     ${state.settingsTab === 'data' ? renderDataSettings() : ''}
                 </div>
             `;
@@ -1572,7 +1808,7 @@
             ];
 
             const settingsHotkeys = [
-                { key: '1-6', action: 'Switch between tabs' }
+                { key: '1-7', action: 'Switch between tabs' }
             ];
 
             const renderHotkeyTable = (hotkeys) => hotkeys.map(h => `
@@ -1614,6 +1850,83 @@
                     <h3>Settings Hotkeys</h3>
                     ${renderHotkeyTable(settingsHotkeys)}
                 </div>
+            `;
+        }
+
+        function renderAchievementsSettings() {
+            const achievements = loadAchievements();
+            const unlocked = achievements.unlocked || [];
+            const totalAchievements = ACHIEVEMENTS.length;
+            const unlockedCount = unlocked.length;
+            const percentage = Math.round((unlockedCount / totalAchievements) * 100);
+
+            const categories = [
+                { id: 'getting-started', name: 'Getting Started', icon: 'play' },
+                { id: 'consistency', name: 'Consistency', icon: 'flame' },
+                { id: 'wins', name: 'Wins', icon: 'trophy' },
+                { id: 'reflection', name: 'Reflection', icon: 'brain' },
+                { id: 'explorer', name: 'Explorer', icon: 'compass' },
+                { id: 'special', name: 'Special', icon: 'star' }
+            ];
+
+            const streak = calculateStreak();
+
+            return `
+                <div class="settings-section">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="mb-0">Progress</h3>
+                        <div class="text-right">
+                            <span class="text-2xl font-black text-amber-400">${unlockedCount}</span>
+                            <span class="text-slate-500">/ ${totalAchievements}</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-3 mb-4">
+                        <div class="bg-gradient-to-r from-amber-500 to-orange-500 h-3 rounded-full transition-all" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-900 rounded-xl p-4 text-center">
+                            <div class="text-3xl font-black text-amber-400">${streak}</div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase">Day Streak</div>
+                        </div>
+                        <div class="bg-slate-900 rounded-xl p-4 text-center">
+                            <div class="text-3xl font-black text-indigo-400">${percentage}%</div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase">Complete</div>
+                        </div>
+                    </div>
+                </div>
+
+                ${categories.map(cat => {
+                    const catAchievements = ACHIEVEMENTS.filter(a => a.category === cat.id);
+                    const catUnlocked = catAchievements.filter(a => unlocked.includes(a.id)).length;
+
+                    return `
+                        <div class="settings-section">
+                            <div class="flex items-center gap-2 mb-4">
+                                <i data-lucide="${cat.icon}" class="w-4 h-4 text-amber-400"></i>
+                                <h3 class="mb-0">${cat.name}</h3>
+                                <span class="ml-auto text-sm text-slate-500">${catUnlocked}/${catAchievements.length}</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                ${catAchievements.map(a => {
+                                    const isUnlocked = unlocked.includes(a.id);
+                                    const unlockedDate = achievements[a.id + '_date'];
+                                    return `
+                                        <div class="flex items-center gap-3 p-3 rounded-xl ${isUnlocked ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-slate-900/50 border border-slate-800'}">
+                                            <div class="w-10 h-10 rounded-xl flex items-center justify-center ${isUnlocked ? 'bg-amber-500/20' : 'bg-slate-800'}">
+                                                <i data-lucide="${isUnlocked ? a.icon : 'lock'}" class="w-5 h-5 ${isUnlocked ? 'text-amber-400' : 'text-slate-600'}"></i>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-bold text-sm ${isUnlocked ? 'text-white' : 'text-slate-500'}">${escapeHtml(a.name)}</div>
+                                                <div class="text-[10px] ${isUnlocked ? 'text-amber-400/70' : 'text-slate-600'} truncate">${escapeHtml(a.description)}</div>
+                                            </div>
+                                            ${isUnlocked && unlockedDate ? `<div class="text-[9px] text-slate-500">${new Date(unlockedDate).toLocaleDateString()}</div>` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
             `;
         }
 
@@ -1685,6 +1998,9 @@
 
             // Skip other hotkeys if typing
             if (isTyping) return;
+
+            // Track hotkey usage for achievement
+            trackAchievementStat('hotkeyUsed');
 
             // Global hotkeys (work in all views)
             if (e.key === 't' || e.key === 'T') {
@@ -1812,7 +2128,7 @@
 
             // Settings hotkeys
             if (state.view === 'settings') {
-                const tabs = ['general', 'skills', 'moods', 'phases', 'data'];
+                const tabs = ['general', 'skills', 'moods', 'phases', 'hotkeys', 'achievements', 'data'];
                 const numKey = parseInt(e.key);
                 if (numKey >= 1 && numKey <= tabs.length) {
                     e.preventDefault();
