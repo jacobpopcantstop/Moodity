@@ -163,6 +163,37 @@
             text-transform: uppercase;
             pointer-events: none;
         }
+
+        /* Toolbar hotkey hints - positioned above */
+        .toolbar-hint {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 4px;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            background: rgba(148, 163, 184, 0.3);
+            color: #94a3b8;
+            font-size: 8px;
+            font-weight: 700;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* Smooth slider transition */
+        .custom-range {
+            transition: none;
+        }
+        .custom-range::-webkit-slider-thumb {
+            transition: transform 0.1s ease;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen">
@@ -276,6 +307,7 @@
             uiSize: 'medium',
             appTitle: 'MOODITY',
             showHotkeyHints: false,
+            hotkeysEnabled: true,
             skills: [
                 { id: 'skill-1', name: 'Social', icon: 'users' },
                 { id: 'skill-2', name: 'Org', icon: 'layout' },
@@ -293,7 +325,8 @@
                     id: 'phase-1',
                     title: 'Emotional Baseline',
                     type: 'mood-arousal',
-                    arousalLabel: 'Intensity Arousal',
+                    arousalLabel: 'Intensity',
+                    guidingQuestion: 'How are you feeling right now? Select your current mood and rate its intensity.',
                     arousalMin: 1,
                     arousalMax: 5
                 },
@@ -301,6 +334,7 @@
                     id: 'phase-2',
                     title: 'Social Interaction',
                     type: 'toggles',
+                    guidingQuestion: 'Think about your social interactions. Did you engage in back-and-forth conversation? Connect positively with others?',
                     toggles: [
                         { id: 'toggle-1', label: 'Reciprocal Conversation', key: 'reciprocalConversation' },
                         { id: 'toggle-2', label: 'Positive Peer Connection', key: 'peerConnection' },
@@ -311,6 +345,7 @@
                     id: 'phase-3',
                     title: 'Executive Function',
                     type: 'toggles',
+                    guidingQuestion: 'Consider your focus and organization. Were you able to stay on task? Did you manage your materials and time well?',
                     toggles: [
                         { id: 'toggle-4', label: 'Organizational Quality', key: 'organizationalQuality' },
                         { id: 'toggle-5', label: 'Task Persistence', key: 'taskPersistence' }
@@ -320,6 +355,7 @@
                     id: 'phase-4',
                     title: 'Session Notes',
                     type: 'notes-rating',
+                    guidingQuestion: 'How well did you regulate your emotions and responses? Add any context or details worth remembering.',
                     ratingLabel: 'Internal Regulation Rating',
                     ratingMin: 0,
                     ratingMax: 3,
@@ -967,7 +1003,7 @@
 
         function downloadCSV() {
             try {
-                const headers = ['Date', 'Time', 'Type', 'Mood', 'Arousal', 'Status', 'Notes'];
+                const headers = ['Date', 'Time', 'Type', 'Mood', 'Intensity', 'Status', 'Notes'];
                 const rows = state.history.map(h => {
                     const date = new Date(h.timestamp);
                     return [
@@ -1157,29 +1193,29 @@
                         <h1 class="text-3xl md:text-4xl font-black tracking-tighter uppercase italic text-white">${escapeHtml(state.settings.appTitle || 'MOODITY')}</h1>
                     </div>
 
-                    <nav class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-slate-800 flex-wrap">
+                    <nav class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-slate-800 flex-wrap pt-6">
                         ${state.history.length > 0 ? `
                         <button id="undo-btn" class="p-3 text-slate-400 hover:text-indigo-400 transition-colors relative" title="Undo (Ctrl+Z)">
-                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint text-[7px]">⌘Z</span>' : ''}
+                            ${state.settings.showHotkeyHints ? '<span class="toolbar-hint">⌘Z</span>' : ''}
                             <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
                         </button>
                         <div class="w-px h-6 bg-slate-800"></div>
                         ` : ''}
 
                         <button id="timer-btn" class="flex items-center gap-2 px-3 py-2 rounded-xl transition-all relative ${state.timerActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}">
-                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">T</span>' : ''}
+                            ${state.settings.showHotkeyHints ? '<span class="toolbar-hint">T</span>' : ''}
                             <i data-lucide="timer" class="w-4 h-4"></i>
                             <span id="timer-display" class="font-mono text-sm font-bold">${formatTime(state.timeLeft)}</span>
                         </button>
 
                         <button id="archive-btn" class="flex items-center gap-2 px-3 py-2 relative ${state.view === 'history' ? 'bg-indigo-600 text-white' : 'bg-indigo-500/10 text-indigo-400'} rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">
-                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">A</span>' : ''}
+                            ${state.settings.showHotkeyHints ? '<span class="toolbar-hint">A</span>' : ''}
                             <i data-lucide="archive" class="w-4 h-4"></i>
                             <span class="text-[10px] font-black uppercase">${state.history.length}</span>
                         </button>
 
                         <button id="settings-btn" class="p-3 relative ${state.view === 'settings' ? 'text-indigo-400' : 'text-slate-400'} hover:text-indigo-400 transition-colors" title="Settings">
-                            ${state.settings.showHotkeyHints ? '<span class="hotkey-hint">S</span>' : ''}
+                            ${state.settings.showHotkeyHints ? '<span class="toolbar-hint">S</span>' : ''}
                             <i data-lucide="settings" class="w-5 h-5"></i>
                         </button>
                     </nav>
@@ -1268,6 +1304,9 @@
             document.getElementById('import-input')?.addEventListener('change', importData);
             document.getElementById('toggle-hotkey-hints')?.addEventListener('click', () => {
                 updateSettings({ showHotkeyHints: !state.settings.showHotkeyHints });
+            });
+            document.getElementById('toggle-hotkeys-enabled')?.addEventListener('click', () => {
+                updateSettings({ hotkeysEnabled: state.settings.hotkeysEnabled === false ? true : false });
             });
 
             document.getElementById('app-title-input')?.addEventListener('input', (e) => {
@@ -1445,8 +1484,15 @@
 
         function renderPhaseContent(phase) {
             const showHints = state.settings.showHotkeyHints;
+            const guidingHtml = phase.guidingQuestion ? `
+                <div class="mb-6 p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
+                    <p class="text-sm text-slate-400 italic"><i data-lucide="help-circle" class="w-4 h-4 inline mr-2 text-indigo-400"></i>${escapeHtml(phase.guidingQuestion)}</p>
+                </div>
+            ` : '';
+
             if (phase.type === 'mood-arousal') {
                 return `
+                    ${guidingHtml}
                     <div class="space-y-8">
                         <div class="grid grid-cols-${state.settings.moods.length} gap-4">
                             ${state.settings.moods.map((m, idx) => `
@@ -1460,10 +1506,10 @@
                         </div>
                         <div class="p-6 bg-slate-900/50 rounded-2xl border border-slate-800">
                             <div class="flex justify-between items-center mb-4">
-                                <label for="arousal-slider" class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${escapeHtml(phase.arousalLabel || 'Arousal')}</label>
+                                <label for="arousal-slider" class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${escapeHtml(phase.arousalLabel || 'Intensity')}</label>
                                 <span class="text-3xl font-black text-indigo-400 font-mono">${state.currentSession.arousal}</span>
                             </div>
-                            <input type="range" id="arousal-slider" min="${phase.arousalMin || 1}" max="${phase.arousalMax || 5}" value="${state.currentSession.arousal}" class="custom-range">
+                            <input type="range" id="arousal-slider" min="${phase.arousalMin || 1}" max="${phase.arousalMax || 5}" value="${state.currentSession.arousal}" step="1" class="custom-range">
                             <div class="flex justify-between text-[9px] text-slate-600 mt-2">
                                 <span>Low</span><span>High</span>
                             </div>
@@ -1474,6 +1520,7 @@
 
             if (phase.type === 'toggles') {
                 return `
+                    ${guidingHtml}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         ${(phase.toggles || []).map((t, idx) => {
                             const active = state.currentSession.toggles[t.key];
@@ -1494,6 +1541,7 @@
 
             if (phase.type === 'notes-rating') {
                 return `
+                    ${guidingHtml}
                     <div class="space-y-6">
                         <div>
                             <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">${escapeHtml(phase.ratingLabel || 'Rating')} (${phase.ratingMin || 0}-${phase.ratingMax || 3})</p>
@@ -1772,7 +1820,7 @@
                                 ` : ''}
 
                                 ${phase.type === 'mood-arousal' ? `
-                                    <p class="ml-8 text-slate-500 text-xs">Shows mood selection and arousal slider</p>
+                                    <p class="ml-8 text-slate-500 text-xs">Shows mood selection and intensity slider</p>
                                 ` : ''}
 
                                 ${phase.type === 'notes-rating' ? `
@@ -1804,7 +1852,7 @@
                 { key: '←', action: 'Previous step' },
                 { key: '→ / Enter', action: 'Next step / Save' },
                 { key: '1-9', action: 'Select mood/toggle option' },
-                { key: '↑ / ↓', action: 'Adjust arousal slider' }
+                { key: '↑ / ↓', action: 'Adjust intensity slider' }
             ];
 
             const settingsHotkeys = [
@@ -1818,8 +1866,21 @@
                 </div>
             `).join('');
 
+            const hotkeysEnabled = state.settings.hotkeysEnabled !== false;
+
             return `
                 <div class="settings-section">
+                    <h3>Enable Hotkeys</h3>
+                    <p class="text-slate-500 text-sm mb-4">Turn keyboard shortcuts on or off entirely.</p>
+                    <button id="toggle-hotkeys-enabled" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${hotkeysEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}">
+                        <div class="w-10 h-6 rounded-full relative transition-all ${hotkeysEnabled ? 'bg-indigo-400' : 'bg-slate-700'}">
+                            <div class="absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${hotkeysEnabled ? 'left-5' : 'left-1'}"></div>
+                        </div>
+                        <span class="font-bold text-sm">${hotkeysEnabled ? 'Hotkeys Enabled' : 'Hotkeys Disabled'}</span>
+                    </button>
+                </div>
+
+                <div class="settings-section ${!hotkeysEnabled ? 'opacity-50 pointer-events-none' : ''}">
                     <h3>Show Hotkey Hints</h3>
                     <p class="text-slate-500 text-sm mb-4">Display keyboard shortcut badges on buttons throughout the app.</p>
                     <button id="toggle-hotkey-hints" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${state.settings.showHotkeyHints ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}">
@@ -1830,23 +1891,23 @@
                     </button>
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section ${!hotkeysEnabled ? 'opacity-50' : ''}">
                     <h3>Global Hotkeys</h3>
                     <p class="text-slate-500 text-sm mb-3">Work in all views</p>
                     ${renderHotkeyTable(globalHotkeys)}
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section ${!hotkeysEnabled ? 'opacity-50' : ''}">
                     <h3>Dashboard Hotkeys</h3>
                     ${renderHotkeyTable(dashboardHotkeys)}
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section ${!hotkeysEnabled ? 'opacity-50' : ''}">
                     <h3>Deep Dive Hotkeys</h3>
                     ${renderHotkeyTable(deepDiveHotkeys)}
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section ${!hotkeysEnabled ? 'opacity-50' : ''}">
                     <h3>Settings Hotkeys</h3>
                     ${renderHotkeyTable(settingsHotkeys)}
                 </div>
@@ -1979,16 +2040,41 @@
         // ===========================================
 
         function handleHotkeys(e) {
+            // Check if hotkeys are fully disabled
+            if (state.settings.hotkeysEnabled === false) {
+                // Still allow Escape to work even when hotkeys are disabled
+                if (e.key === 'Escape') {
+                    if (document.getElementById('icon-picker-modal')?.classList.contains('flex')) {
+                        e.preventDefault();
+                        closeIconPicker();
+                    } else if (!document.getElementById('quick-comment-popup')?.classList.contains('hidden')) {
+                        e.preventDefault();
+                        skipQuickComment();
+                    }
+                }
+                return;
+            }
+
             // Don't trigger hotkeys when typing in inputs
             const activeEl = document.activeElement;
-            const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+            const isTyping = activeEl && (
+                activeEl.tagName === 'INPUT' ||
+                activeEl.tagName === 'TEXTAREA' ||
+                activeEl.isContentEditable ||
+                activeEl.closest('[contenteditable="true"]')
+            );
 
-            // Always allow Escape
+            // Always allow Escape (even when typing)
             if (e.key === 'Escape') {
                 e.preventDefault();
+                // Blur any focused input first
+                if (isTyping) {
+                    activeEl.blur();
+                    return;
+                }
                 if (document.getElementById('icon-picker-modal')?.classList.contains('flex')) {
                     closeIconPicker();
-                } else if (document.getElementById('quick-comment-popup')?.classList.contains('flex')) {
+                } else if (!document.getElementById('quick-comment-popup')?.classList.contains('hidden')) {
                     skipQuickComment();
                 } else if (state.view !== 'dashboard') {
                     setState({ view: 'dashboard' });
@@ -1996,7 +2082,7 @@
                 return;
             }
 
-            // Skip other hotkeys if typing
+            // Skip ALL other hotkeys if typing in any text field
             if (isTyping) return;
 
             // Track hotkey usage for achievement
