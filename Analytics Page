@@ -1,0 +1,599 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Upload, 
+  FileText, 
+  TrendingUp, 
+  TrendingDown, 
+  Activity, 
+  Search, 
+  Filter, 
+  Calendar, 
+  BarChart2, 
+  PieChart as PieChartIcon,
+  List,
+  X,
+  CheckCircle,
+  AlertCircle
+} from 'lucide-react';
+
+/**
+ * UTILITIES
+ */
+
+// Robust CSV Parser handling quoted strings
+const parseCSV = (text) => {
+  const lines = text.split('\n').filter(l => l.trim());
+  const headers = lines[0].split(',').map(h => h.trim());
+  
+  return lines.slice(1).map((line, idx) => {
+    const row = {};
+    let currentVal = '';
+    let inQuotes = false;
+    let colIndex = 0;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        if (colIndex < headers.length) {
+          row[headers[colIndex]] = currentVal.trim();
+        }
+        currentVal = '';
+        colIndex++;
+      } else {
+        currentVal += char;
+      }
+    }
+    // Last column
+    if (colIndex < headers.length) {
+      row[headers[colIndex]] = currentVal.trim();
+    }
+    
+    // Add unique ID and random sort key
+    row.id = idx;
+    row.randomSortOrder = Math.random(); // Assign stable random value for consistent shuffling
+    
+    // Normalize date for sorting
+    if (row.Date) {
+      try {
+        row.timestamp = new Date(`${row.Date} ${row.Time || ''}`).getTime();
+      } catch (e) {
+        row.timestamp = 0;
+      }
+    }
+    
+    // Ensure Notes exists to prevent crashes
+    if (!row.Notes) row.Notes = '';
+    
+    return row;
+  });
+};
+
+// Demo Data based on user snippet
+const DEMO_CSV = `Date,Time,Type,Mood,Intensity,Status,Notes
+2/6/2026,08:01 AM,Motor,neutral,3,Win,"WIN: Motor"
+2/6/2026,08:01 AM,Regulation,neutral,3,Struggle,"STRUGGLE: Regulation"
+2/6/2026,08:00 AM,Task,neutral,3,Win,"WIN: Task"
+2/6/2026,08:00 AM,Task,neutral,3,Win,"WIN: Task"
+2/6/2026,08:00 AM,Organization,neutral,3,Win,"WIN: Organization"
+2/6/2026,08:00 AM,Task,neutral,3,Win,"WIN: Task"
+2/6/2026,08:00 AM,Regulation,neutral,3,Struggle,
+2/6/2026,08:00 AM,Regulation,neutral,3,Struggle,"STRUGGLE: Regulation"
+2/6/2026,07:59 AM,Regulation,neutral,3,Struggle,
+2/6/2026,07:59 AM,Social,neutral,3,Struggle,"STRUGGLE: Social"
+2/6/2026,07:59 AM,Motor,neutral,3,Win,"WIN: Motor"
+2/6/2026,07:59 AM,Task,neutral,3,Win,"WIN: Task"
+1/6/2026,02:54 PM,Task,neutral,3,Win,"WIN: Task - focused on the 9th grade talents well"
+1/6/2026,02:16 PM,Independence,neutral,3,Win,"WIN: Independence - went and got her laptop alone!"
+1/6/2026,01:51 PM,Regulation,neutral,3,Win,"WIN: Regulation - settled into listening in Bio well"
+1/6/2026,01:27 PM,Social,neutral,3,Struggle,"STRUGGLE: Social - negative language in bio"
+1/6/2026,01:26 PM,Regulation,neutral,3,Struggle,"STRUGGLE: Regulation - really struggles to keep quiet in biology"
+1/6/2026,12:12 PM,Social,neutral,3,Win,"WIN: Social - wants to judge in 9th grade presentations"
+1/6/2026,12:05 PM,Organization,neutral,3,Win,"WIN: Organization - found writing notebook and opened it without support"
+1/6/2026,12:05 PM,Social,neutral,3,Win,"WIN: Social - sought out friends for lunch"
+1/6/2026,11:03 AM,Independence,neutral,3,Win,"WIN: Independence - planned and executed a talk with Mr. Chris"`;
+
+/**
+ * COMPONENTS
+ */
+
+const Card = ({ children, className = "" }) => (
+  <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${className}`}>
+    {children}
+  </div>
+);
+
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass }) => (
+  <Card className="p-6 flex items-start justify-between">
+    <div>
+      <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+      <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+      {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+    </div>
+    <div className={`p-3 rounded-lg ${colorClass} bg-opacity-10`}>
+      <Icon className={`w-6 h-6 ${colorClass.replace('bg-', 'text-')}`} />
+    </div>
+  </Card>
+);
+
+const Badge = ({ type, status }) => {
+  let color = "bg-slate-100 text-slate-600";
+  
+  if (status === 'Win') color = "bg-emerald-100 text-emerald-700 border border-emerald-200";
+  if (status === 'Struggle') color = "bg-rose-100 text-rose-700 border border-rose-200";
+  
+  // Category colors if status isn't the primary indicator
+  if (!status) {
+    switch (type) {
+      case 'Social': color = "bg-blue-100 text-blue-700"; break;
+      case 'Task': color = "bg-purple-100 text-purple-700"; break;
+      case 'Regulation': color = "bg-amber-100 text-amber-700"; break;
+      case 'Motor': color = "bg-indigo-100 text-indigo-700"; break;
+      case 'Independence': color = "bg-teal-100 text-teal-700"; break;
+      default: break;
+    }
+  }
+
+  return (
+    <span className={`px-2 py-1 rounded-md text-xs font-semibold ${color}`}>
+      {type || status}
+    </span>
+  );
+};
+
+const CustomPieChart = ({ data }) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let currentAngle = 0;
+
+  if (total === 0) return <div className="text-center text-slate-400 py-8 text-sm">No data available</div>;
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative w-40 h-40 my-4">
+        {/* SVG Pie */}
+        <svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full drop-shadow-sm">
+          {data.map((item, i) => {
+            const percentage = item.value / total;
+            const angle = percentage * 360;
+            
+            // Handle 100% single slice case
+            if (percentage === 1) {
+              return (
+                <circle key={item.label} cx="50" cy="50" r="40" fill={item.color} />
+              );
+            }
+
+            const x1 = 50 + 40 * Math.cos((Math.PI / 180) * currentAngle);
+            const y1 = 50 + 40 * Math.sin((Math.PI / 180) * currentAngle);
+            const x2 = 50 + 40 * Math.cos((Math.PI / 180) * (currentAngle + angle));
+            const y2 = 50 + 40 * Math.sin((Math.PI / 180) * (currentAngle + angle));
+            
+            const largeArcFlag = percentage > 0.5 ? 1 : 0;
+            
+            const pathData = [
+              `M 50 50`,
+              `L ${x1} ${y1}`,
+              `A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+              `Z`
+            ].join(' ');
+
+            const slice = (
+               <path 
+                 key={item.label}
+                 d={pathData} 
+                 fill={item.color} 
+                 stroke="white"
+                 strokeWidth="2"
+                 className="hover:opacity-90 transition-opacity cursor-pointer"
+               />
+            );
+            
+            currentAngle += angle;
+            return slice;
+          })}
+          {/* Inner circle for Donut effect */}
+          <circle cx="50" cy="50" r="24" fill="white" />
+        </svg>
+        {/* Center Text */}
+         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-2xl font-bold text-slate-700">{total}</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400">Entries</span>
+         </div>
+      </div>
+
+      {/* Legend */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 w-full mt-2">
+        {data.map(item => (
+          <div key={item.label} className="flex items-center text-xs text-slate-600">
+            <span className="w-2.5 h-2.5 rounded-full mr-2 shadow-sm" style={{ backgroundColor: item.color }}></span>
+            <span className="flex-1 truncate">{item.label}</span>
+            <span className="font-mono font-medium opacity-70 ml-1">{Math.round((item.value/total)*100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const BarChart = ({ data, maxVal }) => {
+  return (
+    <div className="space-y-4">
+      {data.map((item) => (
+        <div key={item.label} className="group">
+          <div className="flex justify-between text-sm mb-1">
+            <span className="font-medium text-slate-700 flex items-center gap-2">
+              {item.label}
+            </span>
+            <span className="text-slate-500">{item.count} ({Math.round(item.percent)}%)</span>
+          </div>
+          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+            {/* Wins Segment */}
+            <div 
+              className="h-full bg-emerald-400 transition-all duration-500"
+              style={{ width: `${(item.wins / item.count) * 100}%` }}
+            />
+             {/* Struggle Segment (implicit remainder) */}
+            <div 
+              className="h-full bg-rose-400 transition-all duration-500"
+              style={{ width: `${(item.struggles / item.count) * 100}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span>{item.wins} Wins</span>
+            <span>{item.struggles} Struggles</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/**
+ * MAIN APP
+ */
+export default function App() {
+  const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedType, setSelectedType] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [sortBy, setSortBy] = useState('random'); // Default to random
+  
+  // Initialize with Demo Data
+  useEffect(() => {
+    const parsed = parseCSV(DEMO_CSV);
+    setData(parsed);
+  }, []);
+
+  // Filter Logic
+  useEffect(() => {
+    let res = [...data]; // Create a copy to sort safely
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      res = res.filter(row => 
+        (row.Notes && row.Notes.toLowerCase().includes(q)) ||
+        (row.Type && row.Type.toLowerCase().includes(q))
+      );
+    }
+
+    if (selectedType !== 'All') {
+      res = res.filter(row => row.Type === selectedType);
+    }
+
+    if (selectedStatus !== 'All') {
+      res = res.filter(row => row.Status === selectedStatus);
+    }
+
+    // Sort Logic
+    if (sortBy === 'newest') {
+      res.sort((a, b) => b.timestamp - a.timestamp);
+    } else {
+      // Use the stable random value assigned during parsing
+      res.sort((a, b) => a.randomSortOrder - b.randomSortOrder);
+    }
+
+    setFilteredData(res);
+  }, [data, searchQuery, selectedType, selectedStatus, sortBy]);
+
+  // Derived Stats
+  const stats = useMemo(() => {
+    const total = filteredData.length;
+    const wins = filteredData.filter(d => d.Status === 'Win').length;
+    const struggles = filteredData.filter(d => d.Status === 'Struggle').length;
+    const winRate = total ? Math.round((wins / total) * 100) : 0;
+    
+    // Group by Type for Table
+    const types = {};
+    filteredData.forEach(d => {
+      if (!types[d.Type]) types[d.Type] = { count: 0, wins: 0, struggles: 0 };
+      types[d.Type].count++;
+      if (d.Status === 'Win') types[d.Type].wins++;
+      if (d.Status === 'Struggle') types[d.Type].struggles++;
+    });
+
+    const typeChartData = Object.keys(types)
+      .map(key => ({
+        label: key,
+        ...types[key],
+        percent: (types[key].count / total) * 100
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Pie Chart Data 1: Success Ratio
+    const pieStatusData = [
+      { label: 'Wins', value: wins, color: '#34d399' }, // emerald-400
+      { label: 'Struggles', value: struggles, color: '#fb7185' } // rose-400
+    ].filter(d => d.value > 0);
+
+    // Pie Chart Data 2: Categories
+    // Pre-defined palette for consistency
+    const catColors = {
+      'Social': '#60a5fa', // blue-400
+      'Task': '#c084fc', // purple-400
+      'Regulation': '#fbbf24', // amber-400
+      'Motor': '#818cf8', // indigo-400
+      'Independence': '#2dd4bf', // teal-400
+      'Organization': '#22d3ee', // cyan-400
+      'Sensory': '#f472b6', // pink-400
+    };
+    const defaultColor = '#94a3b8'; // slate-400
+
+    const pieCategoryData = Object.keys(types).map((type, idx) => ({
+      label: type,
+      value: types[type].count,
+      color: catColors[type] || defaultColor
+    })).sort((a, b) => b.value - a.value);
+
+    return { total, wins, struggles, winRate, typeChartData, pieStatusData, pieCategoryData };
+  }, [filteredData]);
+
+  // File Handlers
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) readFile(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) readFile(file);
+  };
+
+  const readFile = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const parsed = parseCSV(text);
+      setData(parsed);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-12">
+      {/* HEADER */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-sm">
+              M
+            </div>
+            <h1 className="font-bold text-xl tracking-tight">Moodity<span className="text-slate-400 font-normal">Analytics</span></h1>
+          </div>
+          
+          <div className="flex items-center gap-4">
+             {/* File Upload Hidden Input Trigger */}
+             <label className="cursor-pointer px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+              <Upload size={16} />
+              <span>Import CSV</span>
+              <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+            </label>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 mt-8 space-y-8">
+        
+        {/* DRAG DROP ZONE */}
+        {isDragging && (
+           <div 
+             className="fixed inset-0 bg-indigo-500/10 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-dashed border-indigo-500 m-4 rounded-3xl"
+             onDragLeave={() => setIsDragging(false)}
+             onDrop={handleDrop}
+             onDragOver={(e) => e.preventDefault()}
+           >
+             <div className="text-center pointer-events-none animate-bounce">
+               <Upload className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
+               <h3 className="text-2xl font-bold text-indigo-700">Drop your Moodity CSV here</h3>
+             </div>
+           </div>
+        )}
+
+        {/* STATS ROW */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" onDragEnter={() => setIsDragging(true)}>
+          <StatCard 
+            title="Total Entries" 
+            value={stats.total} 
+            icon={FileText} 
+            colorClass="bg-slate-500 text-slate-600"
+          />
+          <StatCard 
+            title="Success Rate" 
+            value={`${stats.winRate}%`} 
+            subtext={`${stats.wins} Wins recorded`}
+            icon={TrendingUp} 
+            colorClass="bg-emerald-500 text-emerald-600"
+          />
+          <StatCard 
+            title="Struggles" 
+            value={stats.struggles} 
+            subtext="Areas for support"
+            icon={AlertCircle} 
+            colorClass="bg-rose-500 text-rose-600"
+          />
+          <StatCard 
+            title="Most Active" 
+            value={stats.typeChartData[0]?.label || '-'} 
+            subtext={`${stats.typeChartData[0]?.count || 0} entries`}
+            icon={Activity} 
+            colorClass="bg-blue-500 text-blue-600"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT COLUMN - VISUALS */}
+          <div className="lg:col-span-1 space-y-6">
+            
+            {/* NEW PIE CHARTS */}
+            <Card className="p-6">
+              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-indigo-500" />
+                Composition
+              </h3>
+              
+              <div className="space-y-8">
+                <div>
+                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mt-2">Win vs Struggle</h4>
+                   <CustomPieChart data={stats.pieStatusData} />
+                </div>
+                
+                <div className="border-t border-slate-100 pt-6">
+                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mb-2">Category Mix</h4>
+                   <CustomPieChart data={stats.pieCategoryData} />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-indigo-500" />
+                Category Breakdown
+              </h3>
+              <div className="mb-4 flex gap-4 text-xs font-medium text-slate-500">
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400"></div>Win</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-400"></div>Struggle</div>
+              </div>
+              <BarChart data={stats.typeChartData} />
+            </Card>
+
+            <Card className="p-6 bg-gradient-to-br from-indigo-600 to-purple-700 text-white border-none">
+              <h3 className="font-bold text-lg mb-2">Insight</h3>
+              <p className="text-indigo-100 text-sm leading-relaxed">
+                You are logging significantly more wins in <strong>{stats.typeChartData[0]?.label || 'General'}</strong> compared to other categories. Keep up the momentum!
+              </p>
+            </Card>
+          </div>
+
+          {/* RIGHT COLUMN - DATA FEED */}
+          <div className="lg:col-span-2 space-y-4">
+            
+            {/* TOOLBAR */}
+            <Card className="p-3 sticky top-20 z-10 shadow-md">
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  <input 
+                    type="text" 
+                    placeholder="Search notes..." 
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
+                  <select 
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="random">Shuffle</option>
+                    <option value="newest">Newest</option>
+                  </select>
+
+                  <select 
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                  >
+                    <option value="All">All Types</option>
+                    {[...new Set(data.map(d => d.Type))].map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+
+                  <select 
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Win">Wins Only</option>
+                    <option value="Struggle">Struggles Only</option>
+                  </select>
+                </div>
+              </div>
+            </Card>
+
+            {/* LIST */}
+            <div className="space-y-3">
+              {filteredData.length === 0 ? (
+                <div className="text-center py-20 text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+                  <Filter className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No entries found matching your filters.</p>
+                </div>
+              ) : (
+                filteredData.map((row) => {
+                  const hasNote = row.Notes && row.Notes.trim().length > 0;
+                  const displayNote = hasNote 
+                    ? row.Notes.replace(/^WIN: |^STRUGGLE: /i, '').replace(/^[A-Za-z]+ - /, '')
+                    : 'No additional notes';
+                  
+                  return (
+                    <Card key={row.id} className="p-4 hover:shadow-md transition-shadow group">
+                      <div className="flex items-start gap-4">
+                        {/* Icon Indicator */}
+                        <div className={`mt-1 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                          row.Status === 'Win' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                        }`}>
+                          {row.Status === 'Win' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800 text-sm">{row.Type}</span>
+                              <span className="text-xs text-slate-400">•</span>
+                              <span className="text-xs font-mono text-slate-500">{row.Time}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] uppercase font-bold text-slate-300 tracking-wider hidden sm:inline-block">{row.Date}</span>
+                              <Badge status={row.Status} />
+                            </div>
+                          </div>
+                          
+                          <p className={`text-sm leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all ${hasNote ? 'text-slate-600' : 'text-slate-400 italic'}`}>
+                            {displayNote}
+                          </p>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
