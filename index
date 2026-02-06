@@ -1,1 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodity | Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
 
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-sm">M</div>
+                <h1 class="font-bold text-xl tracking-tight">Moodity</h1>
+            </div>
+            <div class="hidden md:block">
+                <span class="text-xs font-semibold px-2 py-1 bg-slate-100 text-slate-500 rounded border border-slate-200">Local Suite v1.0</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col items-center justify-center px-4 py-16">
+        
+        <div class="text-center max-w-2xl mx-auto mb-12">
+            <h2 class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">
+                Master your <span class="text-indigo-600">mood</span>.<br>
+                Own your <span class="text-indigo-600">progress</span>.
+            </h2>
+            <p class="text-lg text-slate-600 leading-relaxed max-w-lg mx-auto">
+                The complete toolkit for tracking behavioral regulation and visualizing success patterns over time.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+            
+            <!-- Tracker Card -->
+            <!-- Note: Ensure your tracker file is named 'tracker.html' or update the href below -->
+            <a href="Moodity (1).html" class="group relative bg-white rounded-2xl p-8 border border-slate-200 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col items-center text-center overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                
+                <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                    <i data-lucide="pen-tool" class="w-8 h-8"></i>
+                </div>
+                
+                <h3 class="text-2xl font-bold text-slate-800 mb-2">Launch Tracker</h3>
+                <p class="text-slate-500 mb-8 px-4">Log daily wins, struggles, and regulation phases in real-time with the focused entry tool.</p>
+                
+                <span class="mt-auto px-5 py-2.5 bg-slate-50 text-slate-700 font-semibold rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors flex items-center gap-2">
+                    Open Tracker <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </span>
+            </a>
+
+            <!-- Analytics Card -->
+            <!-- Note: Save your React dashboard as 'dashboard.html' or update the href below -->
+            <a href="dashboard.html" class="group relative bg-white rounded-2xl p-8 border border-slate-200 shadow-sm hover:shadow-xl hover:border-purple-200 transition-all duration-300 flex flex-col items-center text-center overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                
+                <div class="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                    <i data-lucide="bar-chart-2" class="w-8 h-8"></i>
+                </div>
+                
+                <h3 class="text-2xl font-bold text-slate-800 mb-2">View Analytics</h3>
+                <p class="text-slate-500 mb-8 px-4">Upload your history CSV to visualize trends, success ratios, and activity breakdowns.</p>
+                
+                <span class="mt-auto px-5 py-2.5 bg-slate-50 text-slate-700 font-semibold rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors flex items-center gap-2">
+                    Open Dashboard <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </span>
+            </a>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-8 mt-8">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <p class="text-slate-400 text-sm">&copy; 2026 Moodity Suite. Local Data Only.</p>
+            <div class="flex justify-center gap-4 mt-4 text-xs text-slate-300">
+                <span>Secure</span> • <span>Private</span> • <span>Offline-Ready</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
